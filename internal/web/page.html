@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>cpa-pulse</title>
+<title>CPA Pulse</title>
 <style>/*CSS*/</style>
 </head>
 <body>
@@ -25,7 +25,7 @@
          loading after 5 seconds, it is retried through the ghfast.top
          mirror, and removed if that fails too. -->
     <img class="logo" src="https://raw.githubusercontent.com/NotRllyRn/cpa-pulse/main/assets/logo.png" alt="" width="30" height="30" onerror="if (this.dataset.mirror) this.remove(); else { this.dataset.mirror = '1'; this.src = 'https://ghfast.top/' + this.src; }">
-    <h1><a class="home" href="https://github.com/NotRllyRn/cpa-pulse" target="_blank" rel="noopener" title="View on GitHub" data-i18n-title="repo_hint">cpa-pulse</a><span class="sub" data-i18n="app_sub"></span></h1>
+    <h1><a class="home" href="https://github.com/NotRllyRn/cpa-pulse" target="_blank" rel="noopener" title="View on GitHub" data-i18n-title="repo_hint">CPA Pulse</a><span class="sub" data-i18n="app_sub"></span></h1>
     <span id="state" class="state"></span>
     <span id="meta" class="meta"></span>
   </header>
@@ -44,27 +44,6 @@
   <div id="notices"></div>
 
   <div id="view-quota">
-  <section class="block">
-    <div class="block-head">
-      <h2 class="block-title" data-i18n="quota">Quota</h2>
-      <button id="refresh-all" class="btn btn-secondary" type="button" data-i18n="refresh_all">Refresh all</button>
-    </div>
-    <div id="accounts" class="accounts"></div>
-  </section>
-
-  <section id="ignition-card" class="card" hidden>
-    <h2 class="card-title" data-i18n="ignition">Ignition</h2>
-    <div class="table-wrap">
-      <table>
-        <thead>
-          <tr><th data-i18n="col_group">Quota group</th><th data-i18n="col_next">Next ignition</th><th data-i18n="col_reset">Current reset</th><th data-i18n="col_last">Last success</th><th data-i18n="col_model">Model</th><th data-i18n="col_status">Status</th></tr>
-        </thead>
-        <tbody id="targets"></tbody>
-      </table>
-    </div>
-    <p id="ignition-note" class="muted"></p>
-  </section>
-
   <section class="card">
     <h2 class="card-title" data-i18n="chart_title">Quota history</h2>
     <div class="filters">
@@ -110,6 +89,27 @@
         </table>
       </div>
     </details>
+  </section>
+
+  <section class="block">
+    <div class="block-head">
+      <h2 class="block-title" data-i18n="quota">Quota</h2>
+      <button id="refresh-all" class="btn btn-secondary" type="button" data-i18n="refresh_all">Refresh all</button>
+    </div>
+    <div id="accounts" class="accounts"></div>
+  </section>
+
+  <section id="ignition-card" class="card" hidden>
+    <h2 class="card-title" data-i18n="ignition">Ignition</h2>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr><th data-i18n="col_group">Quota group</th><th data-i18n="col_next">Next ignition</th><th data-i18n="col_reset">Current reset</th><th data-i18n="col_last">Last success</th><th data-i18n="col_model">Model</th><th data-i18n="col_status">Status</th></tr>
+        </thead>
+        <tbody id="targets"></tbody>
+      </table>
+    </div>
+    <p id="ignition-note" class="muted"></p>
   </section>
 
   <section class="card">

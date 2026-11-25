@@ -171,7 +171,7 @@ func (p *Plugin) registration() registration {
 	return registration{
 		SchemaVersion: pluginabi.SchemaVersion,
 		Metadata: pluginapi.Metadata{
-			Name:             "cpa-pulse",
+			Name:             "CPA Pulse",
 			Version:          p.version,
 			Author:           "NotRllyRn",
 			GitHubRepository: repository,
@@ -238,7 +238,7 @@ func managementRegistration() map[string]any {
 			{Method: http.MethodPost, Path: apiBase + "/check-update", Description: "Check for a newer release"},
 		},
 		"resources": []resource{
-			{Path: pagePath, Menu: "cpa-pulse", Description: "Quota monitoring, ignition and quota chart"},
+			{Path: pagePath, Menu: "CPA Pulse", Description: "Quota monitoring, ignition and quota chart"},
 		},
 	}
 }
