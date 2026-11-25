@@ -1,9 +1,9 @@
 (function () {
   "use strict";
 
-  var API = "/v0/management/lamplighter";
-  var CONFIG_API = "/v0/management/plugins/lamplighter/config";
-  var KEY_STORE = "lamplighter-management-key";
+  var API = "/v0/management/cpa-pulse";
+  var CONFIG_API = "/v0/management/plugins/cpa-pulse/config";
+  var KEY_STORE = "cpa-pulse-management-key";
 
   var key = "";
   var status = null;
@@ -77,189 +77,15 @@
   function watchParent() {
     var root = parentRoot();
     if (!root || !window.MutationObserver) return;
-    new MutationObserver(function () { applyTheme(); applyLanguage(); renderChart(); })
-      .observe(root, { attributes: true, attributeFilter: ["data-theme", "lang"] });
+    new MutationObserver(function () { applyTheme(); renderChart(); })
+      .observe(root, { attributes: true, attributeFilter: ["data-theme"] });
   }
 
-  // ---- Language ----
+  // ---- UI text ----
 
-  // Every visible text, per language. Keys are used by data-i18n attributes
-  // in page.html and by translate() below; {0}, {1} are arguments. A new language
-  // adds a dictionary here and a column in internal/notify/text.go.
+  // UI text used by data-i18n attributes in page.html and translate() below.
+  // Placeholders {0}, {1} are interpolation arguments.
   var I18N = {
-    zh: {
-      app_sub: "点灯人", repo_hint: "在 GitHub 上查看",
-      update_hint: "有新版本 v{0}，可在 CPA 插件商店更新",
-      key_title: "需要管理密钥",
-      key_hint: "在管理中心登录时勾选“记住密码”，此页面会直接使用该密钥；否则请在这里输入，密钥只保存在当前标签页。",
-      key_placeholder: "CPA 管理密钥",
-      key_submit: "确定",
-      key_invalid: "管理密钥无效，请重新输入。",
-      refresh_all: "立即刷新全部",
-      quota: "额度",
-      ignition: "自动点火",
-      col_group: "额度组", col_next: "下次点火", col_reset: "当前重置", col_last: "最近成功", col_model: "模型", col_status: "状态",
-      chart_title: "额度变化", chart_window: "额度窗口", chart_range: "时间范围", chart_sort: "排序",
-      quota_5h: "5 小时额度", quota_7d: "7 天额度",
-      sort_default: "默认排序", sort_low: "最低优先",
-      no_data: "无数据",
-      legend_ignited: "● 点火成功，×n 为同一时刻的多个目标",
-      legend_failed: "✕ 含点火失败",
-      legend_reset: "↻ 重置",
-      pace_reference: "匀速参考",
-      pace_extended: "匀速参考（往回延长）",
-      legend_pace_extended: "匀速参考往回延长到本周期起点（周期中途预定重置变了）",
-      legend_pooled: "多账号的服务显示合计额度，点击行查看详情，再点一次展开各账号",
-      legend_estimated: "合计中有账号缺数据，按它已有的读数和重置时间估算",
-      data_table: "数据表",
-      col_quota: "额度", col_account: "账号", col_latest: "最新", col_min: "最低", col_max: "最高", col_samples: "样本", col_to_reset: "距重置",
-      events: "事件",
-      settings: "设置",
-      bark_url: "Bark 推送地址", bark_group: "Bark 分组",
-      webhook_url: "Webhook 地址", webhook_method: "请求方法", webhook_headers: "请求头（每行一个）", webhook_body: "请求体",
-      webhook_body_placeholder: "留空时发送内置的 JSON 消息",
-      webhook_success: "成功条件（可选）", webhook_success_hint: "JSON 响应必须包含这些字段和值才算发送成功；留空时只检查 HTTP 状态码",
-      webhook_hint: "地址、请求头和请求体中可以使用占位符：{{title}} {{body}} {{text}} {{url}} {{priority}} {{kind}} {{label}} {{time}}。各服务的写法见 README。",
-      headers_invalid: "每行写一个请求头，格式为 名称: 值", json_invalid: "请填写 JSON 对象，例如 {\"code\":0}",
-      test_notify: "测试推送", test_notify_hint: "发送到所有已配置的渠道；刚修改的设置生效后才发送",
-      test_waiting: "等待插件应用新设置…", test_not_applied: "配置尚未生效，未发送测试",
-      test_ok: "{0}：已发送", test_failed: "{0}：失败，{1}", test_response: "响应：{0}",
-      test_unchecked: "只检查了 HTTP 状态码。飞书、钉钉、企业微信等服务失败时也返回 200，请到客户端确认是否收到，或设置成功条件。",
-      test_some_failed: "部分渠道测试失败", test_all_failed: "测试推送失败",
-      thresholds: "提醒阈值", remaining_le: "剩余 ≤",
-      threshold_notice: "提醒", threshold_low: "偏低", threshold_critical: "告急",
-      thresholds_hint: "额度降到每一档时推送一次，耗尽时再推送一次。三档须从高到低，可以相等；前两档也决定额度条和图表的颜色。",
-      thresholds_order: "阈值须满足：提醒 ≥ 偏低 ≥ 告急，未保存",
-      window_5h: "5 小时窗口", window_7d: "7 天窗口",
-      recovery_notify: "额度恢复时通知", reset_reminder: "重置前提醒",
-      recovery_notify_5h: "额度恢复时通知 · 5 小时窗口", recovery_notify_7d: "额度恢复时通知 · 7 天窗口",
-      reset_reminder_5h: "重置前提醒 · 5 小时窗口", reset_reminder_7d: "重置前提醒 · 7 天窗口",
-      mode_off: "关闭", recovery_all: "每次", recovery_after_exhausted: "用完后",
-      reminder_all: "每次", reminder_has_remaining: "有余量",
-      mode_off_title: "关闭", recovery_all_title: "每次重置都通知", recovery_after_exhausted_title: "窗口用完后，在下一次重置时通知一次",
-      reminder_all_title: "每次重置前都提醒", reminder_has_remaining_title: "剩余高于告急阈值时才提醒",
-      notify_modes_hint: "“用完后”：窗口用完后，在下一次重置时通知一次。“有余量”：剩余高于告急阈值时才提醒。重置前提醒在 5 小时窗口重置前 1 小时、7 天窗口重置前 1 天发送。恢复通知附带上一周期的剩余额度，取自每次重置前 30 秒的查询。",
-      quota_queries: "额度查询",
-      models_api_key: "模型列表 API key",
-      models_api_key_hint: "插件用这个 key 从 CPA 读取模型列表，为自动点火选择模型；不使用自动点火时可以留空。请在 CPA 的 access.api-keys 中新建一个专用 key，不要填管理密钥。",
-      poll_interval: "查询间隔（秒）", request_timeout: "请求超时（秒）", history_retention: "历史保留（天）",
-      passive_skip: "被动数据跳过窗口（秒）", passive_skip_max: "最多连续跳过（分钟）",
-      passive_skip_hint: "整点前这段时间内已有被动数据的账号跳过本轮主动查询；设为 0 则每轮都主动查询。",
-      ignition_enabled: "启用自动点火",
-      start_hour: "每日开始（时）", end_hour: "每日结束（时）", end_grace: "结束后宽限（分钟）",
-      grace: "重置后延迟（秒）", failure_retry: "失败重试间隔（秒）", max_transient: "临时错误上限（次）",
-      services: "服务", col_service: "服务", col_ignition_model: "点火模型",
-      monitor_service: "监控 {0}", ignite_service: "点火 {0}", model_auto: "自动：{0}",
-      ignite_groups: "{0} 点火额度组", no_ignition: "不支持点火", list_or: " 或 ",
-      codex_reset_enabled: "转发 Did Codex Reset 发布的 Codex 重置信号",
-      codex_reset_pending: "首次开启时推送当前待生效的排期",
-      chart_prefs: "额度图表", remember_chart_filters: "记住额度窗口、时间范围和排序",
-      remember_chart_filters_hint: "在当前浏览器中记住“额度变化”上次选择的额度窗口、时间范围和排序；关闭后每次打开页面都使用默认选择。",
-      remember_chart_expanded: "记住展开的分组",
-      remember_chart_expanded_hint: "在当前浏览器中记住“额度变化”中展开的多账号分组，5 小时和 7 天额度共用一套；关闭后每次打开页面分组都是收起的。",
-      save_hint: "修改后自动保存到 CPA 的 config.yaml，插件几秒内应用。文本和数字在离开输入框或按回车时保存，保存结果显示在区块标题旁，高级设置按分组显示。",
-      language_note: "通知语言跟随最近打开此页面时管理中心的语言，当前为{0}。",
-      lang_zh: "中文", lang_en: "English",
-      due: "已到", minutes: "{0} 分钟", hours_minutes: "{0} 小时 {1} 分", days: "{0} 天",
-      soon: "即将", in_time: "{0}后", just_now: "刚刚", ago: "{0}前",
-      reset_now: "已重置",
-      state_disabled: "已停用", state_starting: "启动中", state_running: "运行中",
-      last_poll: "上次查询 {0}（{1}）", next_poll: "下次 {0}（{1}）",
-      config_error: "配置无法解析，仍在使用上一份配置：{0}",
-      models_error: "模型列表不可用：{0}",
-      notify_off: "未设置 Bark 推送地址或 Webhook 地址，通知已关闭。",
-      notify_error: "Webhook 设置无效，未启用：{0}",
-      no_models_key: "未设置模型列表 API key，自动点火无法选择模型。",
-      remaining_aria: "{0} {1} 剩余",
-      source_passive: "被动", source_active: "主动", updated: "更新于 {0}",
-      no_accounts: "没有可监控的 {0} 凭证。",
-      first_query: "CPA 启动约 20 秒后开始第一次查询。",
-      refresh: "刷新", refreshed: "已刷新 {0}",
-      account_settings: "账号", rename: "名称",
-      rename_hint: "名称写入 CPA 凭证备注的第一行，保留其余各行。留空则按邮箱区分账号；备注有多行时，清空名称须确认删除整条备注。",
-      account_order_hint: "拖动手柄调整顺序，额度卡片和图表默认顺序随之调整。拖动时按 Esc 可取消。",
-      account_name_aria: "{0} 的名称", account_weight_aria: "{0} 的权重", weight_default: "套餐默认值 {0}",
-      rename_clear_note: "这个账号的备注还有其他内容。清空名称会删除整条备注，继续吗？",
-      weight: "权重", weight_hint: "同一服务有多个账号时，可设置各账号的权重，合计按权重平均剩余额度。权重须大于 0，可带小数；留空使用输入框中提示的套餐默认值。",
-      plan: "套餐：{0}", weight_invalid: "权重必须是大于 0 的数字",
-      cooldown_stale: "额度已恢复，但 CPA 仍冷却到 {0}，期间的请求和点火都会被拒绝；在 CPA 管理中心清除这个账号的冷却。",
-      cooldown: "CPA 冷却到 {0}（{1}）",
-      blocked_5h: "5 小时额度已用完", blocked_7d: "7 天额度已用完", blocked_other: "{0}额度已用完",
-      blocked_until: "{0} 重置后恢复点火", blocked_wait: "额度恢复后恢复点火",
-      paused_until: "暂停至 {0}", failures: "失败 {0} 次", rolling: "窗口未开始", normal: "正常",
-      ignition_note: "每天 {0}:00 开始，之后在每次重置后 {1} 秒点火，最晚到 {2}。",
-      no_targets: "没有启用点火的额度组。",
-      ignite_now: "立即点火",
-      ignite_confirm: "立即向 {0} 发送一次点火请求？这会开始一个新的 5 小时窗口。",
-      ignited: "{0} 点火成功",
-      ev_ignite: "点火成功", ev_ignite_manual: "手动点火", ev_ignite_failed: "点火失败", ev_ignite_paused: "点火暂停", ev_model_refused: "模型被拒",
-      ev_cooldown_stale: "冷却未解除", ev_plan_change: "套餐变化", ev_notify: "已推送", ev_notify_failed: "推送失败", ev_codex_reset: "重置信号", ev_error: "错误",
-      ev_ignited: "{0} · 下次重置 {1}",
-      ev_retry: "{0}后重试：{1}", ev_retry_cooldown: "CPA 冷却结束，{0}后重试：{1}",
-      ev_seconds: "{0} 秒", ev_minutes: "{0} 分钟",
-      ev_paused: "暂停到 {0}：{1}",
-      ev_paused_auth: "暂停，等待更新凭证：{0}", ev_paused_suspended: "暂停，账号已停用：{0}",
-      ev_refused: "{0} 被上游拒绝，改用 {1}，{2} 小时内不再尝试",
-      ev_notify_failed_detail: "{0}：{1}",
-      ev_cooldown: "额度已恢复，CPA 仍冷却到 {0}",
-      ev_codex_sent: "已发送 {0} 条通知",
-      ev_reset: "额度重置", ev_exhausted: "额度耗尽", ev_credential_invalid: "凭证失效", ev_credential_suspended: "账号停用",
-      ev_credential_rate_limited: "被限流", ev_credential_restored: "凭证恢复", ev_notify_quota: "额度提醒", ev_notify_reminder: "重置提醒",
-      ev_window_left: "{0} · 剩余 {1}", ev_window_next: "{0} · 剩余 {1} · 下次重置 {2}", ev_window_due: "{0} · 剩余 {1} · {2} 重置",
-      ev_limited_until: "{0} · 限流到 {1}", ev_ignite_paused_note: "{0} · 点火已暂停", ev_ignite_paused_until: "{0} · 点火暂停到 {1}", ev_appeal: "申诉", ev_source_ignite: "点火时确认", ev_source_query: "额度查询时确认",
-      ev_show_5h: "显示 5 小时重置", ev_show_5h_count: "显示 5 小时重置（{0}）",
-      no_events: "暂无事件", collapse: "收起", show_more: "显示更多（共 {0} 条）",
-      failed: "失败：{0}",
-      range_h: "{0} 小时", range_d: "{0} 天", range_mo: "{0} 个月",
-      overview_aria: "各额度剩余百分比总览",
-      ignition_lane: "点火", lane_ok: "{0} 成功", lane_failed: " · {0} 失败",
-      total: "合计", total_suffix: " 合计", estimated_suffix: "（估算）", more_accounts: "　… 另 {0} 个账号",
-      pooled_note: "{0} 个账号合计，阴影为账号间的最低到最高",
-      stat_total: "合计", stat_current: "当前", stat_pace: "匀速", stat_diff: "差值", stat_to_reset: "距重置",
-      projected_5h: "按当前速度", projected_7d: "按本周期日均",
-      legend_projection_5h: "按当前速度的延长线", legend_projection_7d: "按本周期日均的延长线", legend_hatch: "无数据或尚未到来",
-      detail_aria: "{0} 剩余百分比",
-      detail_keys: "按左右方向键查看各时刻的数值",
-      passive_sample: "（被动）", active_sample: "（主动）",
-      quota_reset: "额度重置",
-      loading: "加载中…", no_history: "这个范围内还没有额度数据。",
-      history_failed: "读取历史失败：{0}",
-      tz_config: "配置中指定", tz_cpa: "跟随 CPA 服务器",
-      tz_note: "通知和页面中的时间使用 {0}，{1}。",
-      save_failed: "保存失败：{0}",
-      management_key_refused: "这是 CPA 管理密钥，未保存。请填写 access.api-keys 中的 key",
-      api_key_refused: "CPA 不接受这个 key，未保存。请填写 access.api-keys 中的 key",
-      load_failed: "加载失败：{0}",
-      refreshed_all: "已刷新全部额度", test_sent: "测试通知已发送",
-      level_full: "满", level_high: "高", level_medium: "中", level_low: "低", level_empty: "空",
-      inactive: "已停用", inactive_suffix: "（已停用）", stat_last: "最后读数",
-      legend_inactive: "已停用：账号不再报告这个窗口，保留到最后一个数据点移出所选范围",
-      drag_handle: "拖动调整顺序",
-      order_failed: "账号顺序保存失败：{0}",
-      view_nav: "页面", advanced: "高级",
-      notify_channels: "通知渠道", webhook_advanced: "高级：请求方法、请求头、请求体和成功条件", alert_rules: "提醒规则",
-      ignition_off: "自动点火已关闭，这些设置暂不生效。",
-      ignition_models_hint: "选择点火模型需要“高级”中的模型列表 API key。",
-      monitor_hint: "勾选要监控额度的服务。",
-      save_saved: "已保存", save_saving: "保存中…",
-      save_field_failed: "✕ {0}保存失败", save_failure_reason: "：{0}", save_failed_compact: "✕ 保存失败", save_more_failed: "（另有 {0} 项失败）", save_order: "排序",
-      save_waiting: "已保存，等待生效", save_applied: "已生效", save_unconfirmed: "未确认生效",
-      save_applied_verified: "已生效，验证通过", save_applied_unverified: "已生效，未能验证：{0}", network_error: "网络错误",
-      mask_on: "打码账号", mask_off: "显示账号", account_n: "账号 {0}",
-      weekdays: "周日,周一,周二,周三,周四,周五,周六",
-      snapshot_card: "复制这张卡片的截图", snapshot_cards: "复制所有卡片的截图", snapshot_detail: "复制曲线详情图的截图",
-      snapshot_copied: "已复制截图", snapshot_failed: "截图复制失败：{0}", snapshot_unsupported: "当前浏览器不支持复制图片",
-      mcp_hint: "AI 客户端（如 Claude Code）可以通过 MCP 查询额度、历史和事件，并刷新额度。",
-      mcp_enabled: "启用 MCP 接口", mcp_listen: "监听地址", mcp_key: "密钥", mcp_key_unset: "未设置",
-      mcp_show: "显示", mcp_hide: "隐藏", copy: "复制", copied: "已复制", copy_failed: "无法复制，请手动选择文本复制",
-      mcp_generate: "生成新密钥", mcp_regenerate_confirm: "生成新密钥？旧密钥会立即失效，使用它的客户端需要换成新密钥。",
-      mcp_status: "状态", mcp_unknown: "未知", mcp_running: "运行中", mcp_stopped: "未启动",
-      mcp_public_url: "对外地址（可选）",
-      mcp_public_url_invalid: "对外地址须为 http 或 https 地址，不能含空格、? 或 #；下面的配置暂用监听地址。",
-      mcp_public_hint: "对外开放时请使用反向代理并配置 HTTPS，然后在这里填写对外地址，下面的配置随之更新。这个地址只保存在当前浏览器。",
-      mcp_snippets: "客户端配置", mcp_claude: "Claude Code", mcp_json: "通用 JSON", mcp_stdio: "只支持 stdio 的客户端（mcp-remote）",
-      mcp_no_key: "先生成密钥，配置中的 <key> 会换成实际的密钥。", mcp_error: "MCP 接口未启动：{0}"
-    },
     en: {
       app_sub: "", repo_hint: "View on GitHub",
       update_hint: "v{0} is available; update it in the CPA plugin store",
@@ -331,8 +157,6 @@
       remember_chart_expanded: "Remember expanded groups",
       remember_chart_expanded_hint: "This browser remembers the multi-account groups expanded in the quota history, one set for the 5-hour and 7-day quotas. When off, the page opens with the groups collapsed.",
       save_hint: "Changes save to CPA's config.yaml automatically, and the plugin applies them within a few seconds. Text and numbers save when you leave the field or press Enter. Save results appear beside section headings or advanced group legends.",
-      language_note: "Notifications use the Management Center language from the last time this page was opened, now {0}.",
-      lang_zh: "中文", lang_en: "English",
       due: "due", minutes: "{0} min", hours_minutes: "{0} h {1} min", days: "{0} days",
       soon: "soon", in_time: "in {0}", just_now: "just now", ago: "{0} ago",
       reset_now: "reset",
@@ -386,7 +210,7 @@
       range_h: "{0}h", range_d: "{0}d", range_mo: "{0} month",
       overview_aria: "Remaining quota overview",
       ignition_lane: "Ignition", lane_ok: "{0} succeeded", lane_failed: " · {0} failed",
-      total: "Total", total_suffix: " total", estimated_suffix: " (estimated)", more_accounts: "　… {0} more accounts",
+      total: "Total", total_suffix: " total", estimated_suffix: " (estimated)", more_accounts: "\u2003… {0} more accounts",
       pooled_note: "Total of {0} accounts; the shade spans the lowest to the highest account",
       stat_total: "Total", stat_current: "Now", stat_pace: "Even pace", stat_diff: "Difference", stat_to_reset: "Until reset",
       projected_5h: "At the current rate", projected_7d: "At this cycle's daily average",
@@ -435,36 +259,14 @@
     }
   };
 
-  var lang = "zh";
-
   function translate(key) {
-    var text = (I18N[lang] && I18N[lang][key] !== undefined) ? I18N[lang][key] : (I18N.zh[key] !== undefined ? I18N.zh[key] : key);
+    var text = I18N.en[key] !== undefined ? I18N.en[key] : key;
     for (var i = 1; i < arguments.length; i++) text = text.split("{" + (i - 1) + "}").join(String(arguments[i]));
     return text;
   }
 
-  // The language follows the Management Center: the lang attribute of the
-  // parent page, which it updates on every switch, or the language it stored
-  // when the page is opened on its own. Chinese variants show Chinese and
-  // every other language English.
-  function centerLanguage() {
-    var root = parentRoot();
-    var value = root ? root.getAttribute("lang") || "" : "";
-    if (!value) {
-      try {
-        var raw = localStorage.getItem("cli-proxy-language") || "";
-        try {
-          var parsed = JSON.parse(raw);
-          value = (parsed && parsed.state && parsed.state.language) || (parsed && parsed.language) || (typeof parsed === "string" ? parsed : "");
-        } catch (e) { value = raw; }
-      } catch (e) { /* no storage */ }
-    }
-    if (!value) value = navigator.language || "";
-    return /^zh/i.test(value) ? "zh" : "en";
-  }
-
   function applyStaticText() {
-    document.documentElement.lang = lang === "zh" ? "zh-CN" : "en";
+    document.documentElement.lang = "en";
     [["data-i18n", null], ["data-i18n-placeholder", "placeholder"], ["data-i18n-title", "title"], ["data-i18n-aria-label", "aria-label"]].forEach(function (pair) {
       Array.prototype.forEach.call(document.querySelectorAll("[" + pair[0] + "]"), function (node) {
         var text = translate(node.getAttribute(pair[0]));
@@ -472,40 +274,6 @@
         else node.textContent = text;
       });
     });
-  }
-
-  var languageApplied = false;
-  function applyLanguage() {
-    var next = centerLanguage();
-    if (languageApplied && next === lang) return;
-    lang = next;
-    languageApplied = true;
-    applyStaticText();
-    renderSaveStates();
-    renderRangeButtons();
-    renderMaskButton();
-    renderCardsSnapshot();
-    if (status) {
-      renderStatus();
-      $("timezone-note").textContent = timezoneText();
-      reportLanguage();
-    }
-    if (status && history) renderChart();
-  }
-
-  // Notifications are sent without a page open, so the page tells the
-  // plugin which language to use; it keeps the last one reported.
-  var reportingLanguage = false;
-  function reportLanguage() {
-    if (!status || status.language === lang || reportingLanguage) return;
-    reportingLanguage = true;
-    api("POST", API + "/language", { language: lang }).then(function (data) {
-      if (data.status) { status = data.status; renderLanguageNote(); }
-    }).catch(function () { /* retried on the next status refresh */ }).then(function () { reportingLanguage = false; });
-  }
-
-  function renderLanguageNote() {
-    $("language-note").textContent = translate("language_note", translate("lang_" + (status.language || "zh")));
   }
 
   // With "remember password" on, the Management Center stores the key in
@@ -691,13 +459,13 @@
     return hit ? hit.title : provider;
   }
 
-  // "A、B 或 C" in Chinese, "A, B or C" in English.
+  // Join labels as "A, B or C".
   function listText(items) {
     if (items.length < 2) return items.join("");
-    return items.slice(0, -1).join(lang === "zh" ? "、" : ", ") + translate("list_or") + items[items.length - 1];
+    return items.slice(0, -1).join(", ") + translate("list_or") + items[items.length - 1];
   }
 
-  function localized(text) { return text ? (lang === "zh" ? text.zh : text.en) : ""; }
+  function localized(text) { return typeof text === "string" ? text : text && text.en || ""; }
 
   function badge(kind, text) {
     return el("span", { class: "badge badge-" + kind }, [el("span", { class: "badge-dot" }), document.createTextNode(text)]);
@@ -713,7 +481,7 @@
   // title tooltips that name accounts are left out and labels for screen
   // readers number the accounts. Confirmations keep the names.
   var SENSITIVE = "account-sensitive";
-  var MASK_STORE = "lamplighter-mask-accounts";
+  var MASK_STORE = "cpa-pulse-mask-accounts";
   var masked = false;
   try { masked = localStorage.getItem(MASK_STORE) === "1"; } catch (err) {}
   document.documentElement.classList.toggle("mask-accounts", masked);
@@ -1362,7 +1130,7 @@
   var eventsExpanded = false;
   // Resets of 5-hour windows, one per service every five hours, show only
   // when chosen; the choice is kept in this browser.
-  var EVENTS_STORE = "lamplighter-events-5h";
+  var EVENTS_STORE = "cpa-pulse-events-5h";
   var showFiveHourResets = false;
   try { showFiveHourResets = localStorage.getItem(EVENTS_STORE) === "1"; } catch (err) {}
 
@@ -1437,23 +1205,23 @@
     var parts = [code != null ? "HTTP " + code : "", reason, message].filter(function (s) { return s; });
     var prefix = text.slice(0, start).trim();
     var line = parts.join(" · ");
-    if (prefix) line = prefix + (/[：:]$/.test(prefix) ? (/：$/.test(prefix) ? "" : " ") : " ") + line;
+    if (prefix) line = prefix + " " + line;
     return cutText(line || text.split(/\r?\n/)[0].trim(), ERROR_CHARS);
   }
 
   // What a notification reports. Notifications recorded before notify_kind
-  // existed are told by their title, in either language; see
+  // existed are identified by their title; see
   // internal/notify/text.go.
   function notifyKind(ev) {
     var p = ev.params || {};
     if (p.notify_kind) return p.notify_kind;
-    var title = String(p.title || ev.detail || ev.message || "").replace(/^推送失败 /, "");
+    var title = String(p.title || ev.detail || ev.message || "").replace(/^Notification failed /, "");
     var starts = function (prefix) { return title.indexOf(prefix) === 0; };
     if (/^(📅|✅) Codex /.test(title)) return "codex_reset";
     if (starts("✅")) return "recovery";
-    if (title.indexOf("点火已暂停") >= 0 || title.indexOf("ignition paused") >= 0) return "circuit";
+    if (title.indexOf("ignition paused") >= 0) return "circuit";
     if (starts("🎫")) return "plan";
-    if (title.indexOf("CPA 仍在冷却") >= 0 || title.indexOf("CPA still cooling down") >= 0) return "cooldown";
+    if (title.indexOf("CPA still cooling down") >= 0) return "cooldown";
     if (starts("🟡") || starts("🔴")) return "quota";
     if (starts("⏰")) return "reminder";
     return "";
@@ -1553,14 +1321,14 @@
     return at >= 0 && at <= 3 ? title.slice(0, at) + title.slice(at + label.length + 3) : title;
   }
 
-  // How an event shows in the list, in the page language: the badge style
+  // How an event shows in the list: the badge style
   // and text, the label, a one-line detail, the full text for the tooltip
   // (tip), an appeal link, and the texts of the detail that are sensitive
   // as a whole (secrets): error texts from the provider, which may name an
   // account. whole marks a detail that is sensitive as a whole: the detail
   // of an error event, and of an older event without a label, whose message
   // may name an account that no longer exists. Events written before params
-  // existed keep their stored Chinese text.
+  // existed keep their stored text.
   function eventView(ev, notifyKindOf, paused) {
     var p = ev.params || {};
     var known = EVENT_TYPES[ev.kind];
@@ -1585,7 +1353,6 @@
     if (!ev.params) {
       var detail = ev.detail || ev.message || "";
       if (!ev.detail && view.label && detail.indexOf(view.label + " ") === 0) detail = detail.slice(view.label.length + 1);
-      if (!ev.detail) detail = detail.replace(/^点火成功（(.+?)），下次重置 /, "$1 · 下次重置 ");
       view.detail = errorSummary(detail);
       view.tip = detail;
       return view;
@@ -1774,7 +1541,7 @@
     return true;
   }
 
-  // Labels of the service rows in the current language. The model inputs
+  // Labels of the service rows. The model inputs
   // show, after the automatic rule, the model the next ignition starts with.
   function renderServiceText() {
     var next = status.next_models || {};
@@ -1809,7 +1576,6 @@
     renderAccounts();
     renderTargets();
     renderEvents();
-    renderLanguageNote();
     renderMcp();
   }
 
@@ -1817,7 +1583,6 @@
     return api("GET", API + "/status", undefined, timeout).then(function (data) {
       status = data;
       renderStatus();
-      reportLanguage();
     });
   }
 
@@ -2515,12 +2280,12 @@
       function at(row) { var p = sample(row); return p ? p[1] : null; }
       flat.forEach(function (f) {
         var r = f.row;
-        if (f.depth) { tipRow(tip, "　" + r.sub, at(r), r.id === rowId); return; }
+        if (f.depth) { tipRow(tip, "\u2003" + r.sub, at(r), r.id === rowId); return; }
         var p = sample(r);
         var suffix = r.children ? translate("total_suffix") + (p && p[5] ? translate("estimated_suffix") : "") : r.inactive ? translate("inactive_suffix") : "";
         tipRow(tip, r.name + suffix, p ? p[1] : null, r.id === rowId);
         if (r.children && !chartExpanded[r.id]) {
-          r.children.slice(0, 5).forEach(function (c) { tipRow(tip, "　" + c.sub, at(c), false); });
+          r.children.slice(0, 5).forEach(function (c) { tipRow(tip, "\u2003" + c.sub, at(c), false); });
           if (r.children.length > 5) tip.appendChild(el("div", { class: "row muted", text: translate("more_accounts", r.children.length - 5) }));
         }
       });
@@ -3128,7 +2893,7 @@
         tipRow(tip, translate("total") + (p && p[5] ? translate("estimated_suffix") : ""), p ? p[1] : null, true);
         row.children.slice(0, 6).forEach(function (c) {
           var q = valueAt(c.points, t);
-          tipRow(tip, "　" + c.sub, q && t - q[0] <= limit ? q[1] : null, false);
+          tipRow(tip, "\u2003" + c.sub, q && t - q[0] <= limit ? q[1] : null, false);
         });
         if (row.children.length > 6) tip.appendChild(el("div", { class: "row muted", text: translate("more_accounts", row.children.length - 6) }));
       } else {
@@ -3258,12 +3023,12 @@
     $("legend-projection").textContent = translate("legend_projection_" + historyWindow);
   }
 
-  // The buttons are rebuilt only when the window or the language changes;
+  // The buttons are rebuilt only when the quota window changes;
   // otherwise the chosen range is marked in place, so the thumb stays on its
   // buttons. Clicks are handled by bindSegmented.
   function renderRangeButtons() {
     var box = $("range-buttons");
-    var shown = chartWindow + " " + lang;
+    var shown = chartWindow;
     if (box.getAttribute("data-shown") !== shown) {
       box.setAttribute("data-shown", shown);
       Array.prototype.forEach.call(box.querySelectorAll(".seg"), function (b) {
@@ -3287,8 +3052,8 @@
   // and the label, as in "claude|Claude"; one list serves both windows.
   // The switches read the settings form, so a change applies before it is
   // saved.
-  var CHART_STORE = "lamplighter-chart-filters";
-  var CHART_EXPANDED_STORE = "lamplighter-chart-expanded";
+  var CHART_STORE = "cpa-pulse-chart-filters";
+  var CHART_EXPANDED_STORE = "cpa-pulse-chart-expanded";
 
   function rememberChart() {
     var input = $("settings").elements["remember_chart_filters"];
@@ -3683,7 +3448,7 @@
   // the squash animation; any other placement jumps without animating.
   // Code that changes the selection places the thumb itself; thumbObserver
   // places it again whenever a control or one of its options changes size,
-  // such as after a language change, when the window is resized, and when a
+  // such as when the window is resized, and when a
   // hidden control (the page before the key is entered, the closed settings)
   // becomes visible.
   var thumbObserver = new ResizeObserver(function (entries) {
@@ -3824,7 +3589,7 @@
     // status comparisons do not wait on a trailing slash or an empty field.
     if (top === "bark_url" || top === "cpa_base_url") patch[top] = patch[top].replace(/\/+$/, "");
     if (top === "cpa_base_url" && !patch[top]) patch[top] = "http://127.0.0.1:8317";
-    if (top === "mcp_listen" && !patch[top]) patch[top] = "127.0.0.1:8318";
+    if (top === "mcp_listen" && !patch[top]) patch[top] = "127.0.0.1:8319";
     // A fixed offset from older versions is removed so the time zone follows CPA.
     if (rawConfig.timezone_offset_hours !== undefined) patch.timezone_offset_hours = null;
     // The single switches are replaced by recovery_notify and reset_reminder.
@@ -3897,35 +3662,13 @@
     return entry;
   }
 
-  // Re-render local status messages in the selected language; upstream text
-  // and browser validation messages remain verbatim.
-  function saveText(text) {
-    var keys = ["save_saved", "save_saving", "save_waiting", "save_applied", "save_unconfirmed",
-      "save_applied_verified", "save_applied_unverified", "mcp_error", "weight_invalid",
-      "thresholds_order", "management_key_refused", "api_key_refused", "headers_invalid", "json_invalid"];
-    for (var i = 0; i < keys.length; i++) {
-      var key = keys[i], languages = Object.keys(I18N);
-      for (var j = 0; j < languages.length; j++) {
-        var template = I18N[languages[j]][key], at = template.indexOf("{0}");
-        if (at < 0 && text === template) return translate(key);
-        if (at >= 0) {
-          var before = template.slice(0, at), after = template.slice(at + 3);
-          if (text.slice(0, before.length) === before && text.slice(text.length - after.length) === after) {
-            return translate(key, text.slice(before.length, text.length - after.length));
-          }
-        }
-      }
-    }
-    return text;
-  }
-
   function renderSaveState(host) {
     if (!host || !host.saveEntries) return;
     var entries = Array.from(host.saveEntries.values()), failures = entries.filter(function (entry) { return entry.failure; });
     var latest = entries.filter(function (entry) { return entry.state; }).sort(function (a, b) { return b.order - a.order; })[0];
     failures.sort(function (a, b) { return b.failure.order - a.failure.order; });
     var failed = failures[0], state = failed ? "failed" : latest ? latest.state : "";
-    var text = failed ? translate("save_field_failed", saveItemLabel(failed.input)) : latest ? saveText(latest.text) : "";
+    var text = failed ? translate("save_field_failed", saveItemLabel(failed.input)) : latest ? latest.text : "";
     entries.forEach(function (entry) {
       entry.controls.forEach(function (control) {
         if (entry.failure) control.setAttribute("aria-invalid", "true");
@@ -3948,7 +3691,7 @@
       node.appendChild(message);
       if (failed) {
         var reason = el("span", { "data-save-part": "reason" });
-        var detail = translate("save_failure_reason", saveText(failed.failure.text));
+        var detail = translate("save_failure_reason", failed.failure.text);
         if (host.id === "account-order-state") maskedNodes(detail).forEach(function (part) { reason.appendChild(part); });
         else reason.textContent = detail;
         node.appendChild(reason);
@@ -3959,10 +3702,6 @@
         node.appendChild(count);
       }
     }
-  }
-
-  function renderSaveStates() {
-    Array.prototype.forEach.call(document.querySelectorAll(".settings-section > .card-title, fieldset > legend"), renderSaveState);
   }
 
   function updateSaveEntry(entry, state, text) {
@@ -4241,8 +3980,8 @@
     $("ignition-off").hidden = !off;
   }
 
-  var MCP_LISTEN = "127.0.0.1:8318";
-  var MCP_URL_STORE = "lamplighter-mcp-url";
+  var MCP_LISTEN = "127.0.0.1:8319";
+  var MCP_URL_STORE = "cpa-pulse-mcp-url";
   var mcpKeyShown = false;
 
   // 32 random bytes in base64url after the llmcp_ prefix.
@@ -4331,8 +4070,8 @@
   function mcpSnippets(url, secret) {
     var auth = shellQuote("Authorization: Bearer " + secret);
     return [
-      ["mcp_claude", "claude mcp add --transport http lamplighter " + shellQuote(url) + " --header " + auth],
-      ["mcp_json", JSON.stringify({ mcpServers: { lamplighter: { type: "http", url: url, headers: { Authorization: "Bearer " + secret } } } }, null, 2)],
+      ["mcp_claude", "claude mcp add --transport http cpa-pulse " + shellQuote(url) + " --header " + auth],
+      ["mcp_json", JSON.stringify({ mcpServers: { "cpa-pulse": { type: "http", url: url, headers: { Authorization: "Bearer " + secret } } } }, null, 2)],
       ["mcp_stdio", "npx mcp-remote " + shellQuote(url) + " --header " + auth]
     ];
   }
@@ -4545,7 +4284,7 @@
   // The quota and settings views; the last one shown is kept in this
   // browser. The chart is drawn when its view shows, since it measures its
   // width.
-  var VIEW_STORE = "lamplighter-view";
+  var VIEW_STORE = "cpa-pulse-view";
   function showView(name, bounce) {
     var settings = name === "settings";
     $("view-quota").hidden = settings;
@@ -4626,7 +4365,6 @@
   window.addEventListener("resize", function () { if (history) renderChart(); });
   window.addEventListener("storage", function (e) {
     if (e.key === "cli-proxy-theme") { applyTheme(); renderChart(); }
-    if (e.key === "cli-proxy-language") applyLanguage();
     syncPublicUrl(e.key);
   });
   if (window.matchMedia) {
@@ -4648,7 +4386,9 @@
     }
   }, 5000);
   applyTheme();
-  applyLanguage();
+  applyStaticText();
+  renderMaskButton();
+  renderCardsSnapshot();
   watchParent();
   var storedView = "quota";
   try { storedView = localStorage.getItem(VIEW_STORE) || "quota"; } catch (err) {}

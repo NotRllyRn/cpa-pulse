@@ -2,13 +2,13 @@
 
 [Usage](usage.md) · [Configuration](configuration.md)
 
-MCP lets coding agents query quota through standard Streamable HTTP, independently of the client. The plugin listens on `127.0.0.1:8318` at `/mcp` and requires a dedicated Bearer key. The CPA management key does not authenticate this endpoint. Protocol versions `2025-03-26` and `2025-06-18` are supported; responses are JSON only, without SSE.
+MCP lets coding agents query quota through standard Streamable HTTP, independently of the client. The plugin listens on `127.0.0.1:8319` at `/mcp` and requires a dedicated Bearer key. The CPA management key does not authenticate this endpoint. Protocol versions `2025-03-26` and `2025-06-18` are supported; responses are JSON only, without SSE.
 
-Enable MCP in the settings view; if no key is set, the page generates one in the same save. You can also generate a new key separately or configure these keys under `plugins.configs.lamplighter`:
+Enable MCP in the settings view; if no key is set, the page generates one in the same save. You can also generate a new key separately or configure these keys under `plugins.configs.cpa-pulse`:
 
 ```yaml
 mcp_enabled: true
-mcp_listen: "127.0.0.1:8318"
+mcp_listen: "127.0.0.1:8319"
 mcp_key: "<dedicated MCP key>"
 ```
 
@@ -16,33 +16,33 @@ Use a cryptographic random generator for the key, for example 32 random bytes en
 
 ## Client connections
 
-The default URL within the same network namespace is `http://127.0.0.1:8318/mcp`. Replace it with an HTTPS URL for remote access. `<key>` below is the dedicated MCP key.
+The default URL within the same network namespace is `http://127.0.0.1:8319/mcp`. Replace it with an HTTPS URL for remote access. `<key>` below is the dedicated MCP key.
 
 The MCP section of the Settings view builds client configs for Claude Code, generic JSON and mcp-remote from the listen address, ready to copy. When clients go through a reverse proxy, enter its address under "Public address (optional)" and the configs follow it; the address is kept in the current browser only. The public address must be an http or https address, and `https://` is assumed when no scheme is given. The host may contain only ASCII letters, digits, `.` and `-`, without bracketed IPv6 addresses, and the whole address only printable ASCII, without spaces, `?`, `#` or `\`. An invalid address is pointed out on the page, and the configs keep the listen address.
 
 Claude Code:
 
 ```sh
-claude mcp add --transport http cpa-pulse http://127.0.0.1:8318/mcp --header "Authorization: Bearer <key>"
+claude mcp add --transport http cpa-pulse http://127.0.0.1:8319/mcp --header "Authorization: Bearer <key>"
 ```
 
 Codex CLI, with the key provided through an environment variable:
 
 ```sh
 export CPA_PULSE_MCP_KEY='<key>'
-codex mcp add cpa-pulse --url http://127.0.0.1:8318/mcp --bearer-token-env-var CPA_PULSE_MCP_KEY
+codex mcp add cpa-pulse --url http://127.0.0.1:8319/mcp --bearer-token-env-var CPA_PULSE_MCP_KEY
 ```
 
 Generic client configuration example; check the client's documentation for its configuration format:
 
 ```json
-{"mcpServers":{"cpa-pulse":{"type":"http","url":"http://127.0.0.1:8318/mcp","headers":{"Authorization":"Bearer <key>"}}}}
+{"mcpServers":{"cpa-pulse":{"type":"http","url":"http://127.0.0.1:8319/mcp","headers":{"Authorization":"Bearer <key>"}}}}
 ```
 
 Clients that only support stdio can connect through `mcp-remote`:
 
 ```sh
-npx mcp-remote http://127.0.0.1:8318/mcp --header "Authorization: Bearer <key>"
+npx mcp-remote http://127.0.0.1:8319/mcp --header "Authorization: Bearer <key>"
 ```
 
 ## HTTPS reverse proxy
@@ -58,7 +58,7 @@ server {
     ssl_certificate /etc/letsencrypt/live/quotas.example.com/fullchain.pem;
     ssl_certificate_key /etc/letsencrypt/live/quotas.example.com/privkey.pem;
     location = /mcp {
-        proxy_pass http://127.0.0.1:8318/mcp;
+        proxy_pass http://127.0.0.1:8319/mcp;
         proxy_set_header Authorization $http_authorization;
         proxy_set_header MCP-Protocol-Version $http_mcp_protocol_version;
         proxy_read_timeout 190s;
@@ -70,7 +70,7 @@ Caddy example; point the domain at the proxy and let Caddy obtain the HTTPS cert
 
 ```caddyfile
 quotas.example.com {
-    reverse_proxy /mcp 127.0.0.1:8318 {
+    reverse_proxy /mcp 127.0.0.1:8319 {
         transport http {
             response_header_timeout 190s
         }

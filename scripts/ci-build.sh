@@ -22,5 +22,5 @@ esac
 export CGO_ENABLED=1 GOARCH
 go build -buildvcs=false -trimpath -buildmode=c-shared \
   -ldflags "-s -w -X main.version=$VERSION" \
-  -o "dist/lamplighter-v$VERSION.$EXT" .
+  -o "dist/cpa-pulse-v$VERSION.$EXT" .
 rm -f dist/*.h

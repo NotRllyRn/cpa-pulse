@@ -48,7 +48,7 @@ When the plan of an account changes, for example when Google AI Pro expires or i
 ## Installation
 
 1. Download the zip for the system CPA runs on from [Releases](https://github.com/NotRllyRn/cpa-pulse/releases): on Linux, `linux_amd64` when `uname -m` prints `x86_64` and `linux_arm64` when it prints `aarch64`; `darwin_arm64` for Apple silicon Macs, `darwin_amd64` for Intel Macs; `windows_amd64` for Windows.
-2. Extract the library (`lamplighter-v<version>.so` on Linux, `.dylib` on macOS, `.dll` on Windows) into the `<os>/<arch>/` folder of the CPA plugin directory, for example `plugins/linux/arm64/` or `plugins/windows/amd64/`. In a Docker deployment the plugin directory is the host folder mounted at `/CLIProxyAPI/plugins`.
+2. Extract the library (`cpa-pulse-v<version>.so` on Linux, `.dylib` on macOS, `.dll` on Windows) into the `<os>/<arch>/` folder of the CPA plugin directory, for example `plugins/linux/arm64/` or `plugins/windows/amd64/`. In a Docker deployment the plugin directory is the host folder mounted at `/CLIProxyAPI/plugins`.
 3. Add an API key to CPA's `config.yaml` and enable the plugin:
 
    ```yaml
@@ -59,7 +59,7 @@ When the plan of an account changes, for example when Google AI Pro expires or i
    plugins:
      enabled: true
      configs:
-       lamplighter:
+       cpa-pulse:
          enabled: true
          models_api_key: "new key for cpa-pulse"
          bark_url: "https://api.day.app/your_device_key"
@@ -70,7 +70,7 @@ When the plan of an account changes, for example when Google AI Pro expires or i
 
 The plugin checks for a new version every 6 hours and whenever the management page opens. When a new version is out, a green up arrow appears to the right of the version in the management page header; clicking it opens the release page. To upgrade, update the plugin in the plugin store of the CPA Management Center; for a manual install, put the new library in the same folder, delete the old one and restart CPA.
 
-The plugin keeps its state and quota history in `data/lamplighter/` under the plugin directory. In a Docker deployment that directory is on the host, so recreating the container keeps the data.
+The plugin keeps its state and quota history in `data/cpa-pulse/` under the plugin directory. In a Docker deployment that directory is on the host, so recreating the container keeps the data.
 
 ## How quota is read
 
@@ -167,9 +167,9 @@ The management page uses English.
 | MCP unavailable | Check its dedicated key, listen address and listener error; Docker loopback is inside the container. See [MCP](mcp.md). |
 | PNG copy unavailable | Use HTTPS or localhost with image-clipboard support and clipboard permission. |
 
-## Compatibility and limitations
+## Coexistence and limitations
 
-The product and repository are named **cpa-pulse**. The runtime plugin ID `lamplighter`, `plugins.configs.lamplighter` subtree, management/resource routes, library and release-archive names, browser storage keys, webhook `source` value and default `data/lamplighter/` directory remain for compatibility. Existing installations can keep their configuration and data paths.
+cpa-pulse uses its own plugin ID `cpa-pulse`, configuration subtree `plugins.configs.cpa-pulse`, management route `/v0/management/cpa-pulse`, resource route `/v0/resource/plugins/cpa-pulse/page` and default data directory `data/cpa-pulse/` under the plugin directory. Its MCP listener defaults to `127.0.0.1:8319`. These separate names, paths and port allow it to run alongside Lamplighter. Configure each plugin independently and keep any explicit `data_dir` paths separate. Running both against the same accounts can still send duplicate alerts and quota or ignition requests.
 
 Existing user history, account names and upstream errors are preserved verbatim. Historical event text may retain its original wording. Account blurring only affects display; it does not redact API responses, DOM text or confirmation dialogs. MCP uses its own masked account labels.
 

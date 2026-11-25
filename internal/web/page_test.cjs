@@ -18,7 +18,7 @@ function context(names, globals) {
 }
 
 test("a save counts as applied only by its own config token or a later one", () => {
-  const ctx = context(["tokenApplied", "checkApplied"], { status: { config: { bark_url: "已设置" } } });
+  const ctx = context(["tokenApplied", "checkApplied"], { status: { config: { bark_url: "set" } } });
   const tokens = ["a1", "b2", "c3"];
   assert.equal(ctx.tokenApplied(tokens, "b2", "a1"), false);
   assert.equal(ctx.tokenApplied(tokens, "b2", "b2"), true);
@@ -148,7 +148,6 @@ function stateContext(names = [], globals = {}) {
       if (key === "save_more_failed") return " (" + args[0] + " more failed)";
       return key;
     },
-    saveText: text => text,
     saveItemLabel: input => input.id === "account-order-state" ? "Order" : input.getAttribute("data-account-field") || input.name,
     el: (tag, attrs) => saveNode(tag.toUpperCase(), attrs),
     clear: node => { node.textContent = ""; },
@@ -485,17 +484,21 @@ test("failed states separate the compact summary, field summary, reason and coun
   assert.match(css, /\.save-state\[data-state="failed"\] > \[data-save-part="summary"\], \.save-state > \[data-save-part="reason"\] { display: none; }/);
 });
 
-test("saved messages and dynamic failure reasons follow language changes", () => {
+test("English text interpolates values and reads provider labels", () => {
   const code = source.slice(source.indexOf("  var I18N ="), source.indexOf("\n  function translate("));
-  assert.match(code, /save_field_failed/);
   const globals = vm.createContext({});
   vm.runInContext(code, globals);
-  globals.translate = (key, value) => globals.I18N.en[key].replace("{0}", value);
-  const ctx = context(["saveText"], globals);
-  assert.equal(ctx.saveText(globals.I18N.zh.save_applied), globals.I18N.en.save_applied);
-  assert.equal(ctx.saveText(globals.I18N.zh.weight_invalid), globals.I18N.en.weight_invalid);
-  assert.equal(ctx.saveText(globals.I18N.zh.mcp_error.replace("{0}", "bind failed")), globals.I18N.en.mcp_error.replace("{0}", "bind failed"));
-  assert.equal(ctx.saveText("HTTP 500 upstream error"), "HTTP 500 upstream error");
+  assert.deepEqual(Object.keys(globals.I18N), ["en"]);
+  const ctx = context(["translate", "localized", "listText"], globals);
+  assert.equal(ctx.translate("save_applied"), "In effect");
+  assert.equal(ctx.translate("mcp_error", "bind failed"), "The MCP endpoint is not running: bind failed");
+  assert.equal(ctx.translate("test_failed", "Webhook", "HTTP 500"), "Webhook: failed, HTTP 500");
+  assert.equal(ctx.translate("unknown_key"), "unknown_key");
+  assert.equal(ctx.localized({ en: "café quota" }), "café quota");
+  assert.equal(ctx.localized("naïve résumé 🙂"), "naïve résumé 🙂");
+  assert.equal(ctx.localized(null), "");
+  assert.equal(ctx.localized({}), "");
+  assert.equal(ctx.listText(["A", "B", "C"]), "A, B or C");
 });
 
 const HOUR = 3600, DAY = 86400, WEEK = 7 * DAY;
@@ -570,7 +573,7 @@ test("normal saves use the backend URL defaults and generate a key when enabling
   }
   assert.deepEqual(patch("cpa_base_url", " http://127.0.0.1:8317/// "), { cpa_base_url: "http://127.0.0.1:8317" });
   assert.deepEqual(patch("cpa_base_url", ""), { cpa_base_url: "http://127.0.0.1:8317" });
-  assert.deepEqual(patch("mcp_listen", ""), { mcp_listen: "127.0.0.1:8318" });
+  assert.deepEqual(patch("mcp_listen", ""), { mcp_listen: "127.0.0.1:8319" });
   assert.deepEqual(patch("bark_url", "https://api.day.app/test/"), { bark_url: "https://api.day.app/test" });
   ctx.rawConfig.mcp_key = "  ";
   assert.deepEqual(patch("mcp_enabled", true, "checkbox"), { mcp_enabled: true, mcp_key: "llmcp_generated" });
@@ -601,8 +604,8 @@ test("five color levels use raw percentages before display rounding", () => {
 });
 
 test("window translations have no duplicate definitions", () => {
-  assert.equal((source.match(/window_5h:/g) || []).length, 2);
-  assert.equal((source.match(/window_7d:/g) || []).length, 2);
+  assert.equal((source.match(/window_5h:/g) || []).length, 1);
+  assert.equal((source.match(/window_7d:/g) || []).length, 1);
   assert.match(source, /window_5h: "5-hour window"/);
 });
 
@@ -723,19 +726,19 @@ test("a notification joins the row of the event it reports", () => {
   const ctx = eventContext();
   const g = { group: "codex:a", label: "GPT" };
   const events = [
-    event("notify", 70, { ...g, params: { title: "✅ GPT · 7d 已恢复", notify_kind: "recovery", windows: "seven-day" } }),
+    event("notify", 70, { ...g, params: { title: "✅ GPT · 7d recovered", notify_kind: "recovery", windows: "seven-day" } }),
     event("reset", 60, { ...g, params: { window: "seven-day", kind: "7d", label: "7d", remaining: "100.00" } }),
-    event("notify_failed", 40, { ...g, level: "warn", params: { title: "⚠️ GPT 点火已暂停", notify_kind: "circuit", error: "bark: 500" } }),
-    event("notify", 39, { ...g, params: { title: "⚠️ GPT 点火已暂停", notify_kind: "circuit" } }),
+    event("notify_failed", 40, { ...g, level: "warn", params: { title: "⚠️ GPT ignition paused", notify_kind: "circuit", error: "bark: 500" } }),
+    event("notify", 39, { ...g, params: { title: "⚠️ GPT ignition paused", notify_kind: "circuit" } }),
     event("ignite_paused", 30, { ...g, level: "error", params: { until: "2026-11-17T00:00:00Z", error: "boom", summary: "boom" } }),
     // No event before it: a quota alert stays a row of its own.
     event("notify", 20, { ...g, params: { title: "🟡 GPT · 5h 45%", notify_kind: "quota" } }),
     // Too late for the reset of another group.
-    event("notify", 10, { group: "codex:b", label: "GPT 2", params: { title: "✅ GPT 2 · 7d 已恢复", notify_kind: "recovery" } }),
+    event("notify", 10, { group: "codex:b", label: "GPT 2", params: { title: "✅ GPT 2 · 7d recovered", notify_kind: "recovery" } }),
   ];
   const built = ctx.eventRows(events, false);
   assert.deepEqual(plain(built.rows.map((r) => r.event.kind + "@" + (r.event.params.title || ""))), [
-    "reset@", "ignite_paused@", "notify@🟡 GPT · 5h 45%", "notify@✅ GPT 2 · 7d 已恢复"]);
+    "reset@", "ignite_paused@", "notify@🟡 GPT · 5h 45%", "notify@✅ GPT 2 · 7d recovered"]);
   assert.deepEqual(plain(built.rows[0].pushes.map((ev) => ev.kind)), ["notify"]);
   assert.deepEqual(plain(built.rows[1].pushes.map((ev) => ev.kind).sort()), ["notify", "notify_failed"]);
   const marks = ctx.pushMarks(built.rows[1].pushes);
@@ -754,7 +757,7 @@ test("matching needs the same group, the order, the time limit and the windows",
   const ctx = eventContext();
   const g = { group: "k", label: "Gemini" };
   const reset = (at, window) => event("reset", at, { ...g, params: { window, remaining: "100.00" } });
-  const recovery = (at, windows) => event("notify", at, { ...g, params: { title: "✅ Gemini · 7d 已恢复", notify_kind: "recovery", windows } });
+  const recovery = (at, windows) => event("notify", at, { ...g, params: { title: "✅ Gemini · 7d recovered", notify_kind: "recovery", windows } });
   // Sent before the event, or more than 70 minutes after it, as retries
   // can be: no match.
   assert.equal(ctx.eventRows([reset(100, "gemini-weekly"), recovery(99, "gemini-weekly")], true).rows.length, 2);
@@ -774,7 +777,7 @@ test("matching needs the same group, the order, the time limit and the windows",
   assert.equal(built.fiveHour, 1);
   // Older notifications have no group: their label decides.
   built = ctx.eventRows([
-    event("notify", 20, { label: "Gemini", params: { title: "⚠️ Gemini 额度已恢复，CPA 仍在冷却" } }),
+    event("notify", 20, { label: "Gemini", params: { title: "⚠️ Gemini quota is back, CPA still cooling down" } }),
     event("cooldown_stale", 10, { label: "Gemini", params: { until: "2026-11-17T00:00:00Z" } }),
   ], false);
   assert.equal(built.rows.length, 1);
@@ -784,21 +787,18 @@ test("matching needs the same group, the order, the time limit and the windows",
 test("older notifications are told by their titles", () => {
   const ctx = eventContext();
   const kind = (title, kindName = "notify") => ctx.notifyKind({ kind: kindName, params: { title } });
-  assert.equal(kind("✅ GPT · 7d 已恢复"), "recovery");
   assert.equal(kind("✅ GPT · 7d recovered"), "recovery");
-  assert.equal(kind("⚠️ Gemini 点火已暂停"), "circuit");
   assert.equal(kind("⚠️ Gemini ignition paused"), "circuit");
-  assert.equal(kind("🎫 GPT · 套餐 plus → free"), "plan");
-  assert.equal(kind("⚠️ GPT 额度已恢复，CPA 仍在冷却"), "cooldown");
+  assert.equal(kind("🎫 GPT · plan plus → free"), "plan");
   assert.equal(kind("⚠️ GPT quota is back, CPA still cooling down"), "cooldown");
   assert.equal(kind("🟡 GPT · 5h 45%"), "quota");
   assert.equal(kind("🔴 GPT · 5h 5%"), "quota");
-  assert.equal(kind("⏰ GPT · 5h 重置提醒"), "reminder");
+  assert.equal(kind("⏰ GPT · 5h reset reminder"), "reminder");
   // Codex reset signals also start with ✅ but report no reset of an account.
-  assert.equal(kind("✅ Codex 全局重置已完成"), "codex_reset");
-  assert.equal(kind("🕯️ Lamplighter 测试通知"), "");
+  assert.equal(kind("✅ Codex global reset completed"), "codex_reset");
+  assert.equal(kind("🕯️ cpa-pulse test notification"), "");
   // Failed notifications recorded without params.
-  assert.equal(ctx.notifyKind({ kind: "notify_failed", detail: "✅ GPT · 7d 已恢复：timeout" }), "recovery");
+  assert.equal(ctx.notifyKind({ kind: "notify_failed", detail: "✅ GPT · 7d recovered: timeout" }), "recovery");
   assert.equal(ctx.notifyKind({ kind: "notify", params: { title: "x", notify_kind: "suspended" } }), "suspended");
 });
 
@@ -831,7 +831,7 @@ test("error texts shrink to one line and stay masked", () => {
   assert.equal(ctx.errorSummary(google), "host_call_failed: HTTP 403 · TOS_VIOLATION · The caller does not have permission for alice@example.com");
   assert.equal(ctx.errorSummary('{"error":{"message":"Rate limit reached","type":"rate_limit_error","code":"rate_limit_exceeded"}} (HTTP 429)'),
     "HTTP 429 · rate_limit_error · Rate limit reached");
-  assert.equal(ctx.errorSummary('刷新失败：{"error":"invalid_grant","error_description":"Token has been expired"}'), "刷新失败：invalid_grant · Token has been expired");
+  assert.equal(ctx.errorSummary('Refresh failed: {"error":"invalid_grant","error_description":"Token has been expired"}'), "Refresh failed: invalid_grant · Token has been expired");
   assert.equal(ctx.errorSummary("dial tcp: timeout\nmore lines"), "dial tcp: timeout");
   assert.equal(ctx.errorSummary("{not json\nsecond"), "{not json");
   const long = ctx.errorSummary("x".repeat(400));
@@ -844,7 +844,7 @@ test("error texts shrink to one line and stay masked", () => {
   assert.ok(view.detail.includes("TOS_VIOLATION"));
   assert.ok(view.tip.includes('"code": 403'));
   // The summary from the backend wins over the page's own.
-  assert.ok(ctx.eventView({ ...ev, params: { ...ev.params, summary: "账号被封禁" } }).detail.includes("账号被封禁"));
+  assert.ok(ctx.eventView({ ...ev, params: { ...ev.params, summary: "Account banned" } }).detail.includes("Account banned"));
   // Masked, neither the label nor the error leaves a plain text node.
   const nodes = ctx.eventMasked(ev, view);
   const plainText = (list) => list.filter((n) => n.class !== "account-sensitive").map((n) => n.text || "").join("");
@@ -853,29 +853,29 @@ test("error texts shrink to one line and stay masked", () => {
   assert.ok(!plainText(nodes.detail).includes("TOS_VIOLATION"));
   // The tooltips of notification marks are left out while masked.
   ctx.masked = true;
-  const marks = ctx.pushMarks([event("notify_failed", 0, { params: { title: "⚠️ alice 点火已暂停", error: "x" } })]);
+  const marks = ctx.pushMarks([event("notify_failed", 0, { params: { title: "⚠️ alice ignition paused", error: "x" } })]);
   assert.equal(marks[0].title, null);
 });
 
 test("credential events show the reason, a summary and an appeal link", () => {
   const ctx = eventContext();
   const invalid = (params) => ctx.eventView(event("credential_invalid", 0, { level: "error", label: "Gemini", params }));
-  let view = invalid({ reason: "suspended", status: "403", code: "TOS_VIOLATION", summary: "账号因违反服务条款被停用", appeal_url: "https://support.example.com/appeal", source: "ignite" });
+  let view = invalid({ reason: "suspended", status: "403", code: "TOS_VIOLATION", summary: "Account suspended for violating terms of service", appeal_url: "https://support.example.com/appeal", source: "ignite" });
   assert.equal(view.badge, "ev_credential_suspended");
   assert.equal(view.style, "failure");
   // Found by ignition: the row says ignition is paused.
-  assert.equal(view.detail, "ev_ignite_paused_note(账号因违反服务条款被停用)");
+  assert.equal(view.detail, "ev_ignite_paused_note(Account suspended for violating terms of service)");
   assert.equal(view.link, "https://support.example.com/appeal");
   // The tooltip shows the status, code and summary, and the appeal address.
-  assert.equal(view.tip, "HTTP 403 · TOS_VIOLATION · 账号因违反服务条款被停用\nhttps://support.example.com/appeal");
-  assert.ok(view.secrets.includes("账号因违反服务条款被停用"));
+  assert.equal(view.tip, "HTTP 403 · TOS_VIOLATION · Account suspended for violating terms of service\nhttps://support.example.com/appeal");
+  assert.ok(view.secrets.includes("Account suspended for violating terms of service"));
   view = invalid({ reason: "auth", summary: "", status: "401", appeal_url: "javascript:alert(1)" });
   assert.equal(view.badge, "ev_credential_invalid");
   assert.equal(view.detail, "HTTP 401");
   assert.equal(view.link, "");
-  view = invalid({ reason: "rate_limited", summary: "请求过多", until: "2026-11-16T08:00:00Z" });
+  view = invalid({ reason: "rate_limited", summary: "Too many requests", until: "2026-11-16T08:00:00Z" });
   assert.equal(view.badge, "ev_credential_rate_limited");
-  assert.equal(view.detail, "ev_limited_until(请求过多|11-16T08:00)");
+  assert.equal(view.detail, "ev_limited_until(Too many requests|11-16T08:00)");
   view = ctx.eventView(event("credential_restored", 0, { label: "Gemini", params: { source: "query" } }));
   assert.equal(view.badge, "ev_credential_restored");
   assert.equal(view.style, "success");
@@ -981,8 +981,8 @@ test("the detail heading moves left of the plot only where it fits", () => {
 test("manual ignition failures show no retry, and credential pauses no end time", () => {
   const ctx = eventContext();
   const json = '{"error":{"code":401,"message":"token expired","status":"UNAUTHENTICATED"}}';
-  let view = ctx.eventView(event("ignite_failed", 0, { label: "GPT", params: { manual: "1", error: json, summary: "凭证已失效" } }));
-  assert.equal(view.detail, "凭证已失效");
+  let view = ctx.eventView(event("ignite_failed", 0, { label: "GPT", params: { manual: "1", error: json, summary: "Credential expired" } }));
+  assert.equal(view.detail, "Credential expired");
   assert.equal(view.tip, json);
   view = ctx.eventView(event("ignite_failed", 0, { label: "GPT", params: { manual: "1", error: json } }));
   assert.equal(view.detail, "HTTP 401 · UNAUTHENTICATED · token expired");
@@ -990,14 +990,14 @@ test("manual ignition failures show no retry, and credential pauses no end time"
   // Automatic failures keep the retry; older manual failures without params
   // keep their stored text.
   assert.match(ctx.eventView(event("ignite_failed", 0, { label: "GPT", params: { retry_seconds: "300", error: "x" } })).detail, /^ev_retry\(/);
-  assert.equal(ctx.eventView(event("ignite_failed", 0, { label: "GPT", detail: "点火失败：x" })).detail, "点火失败：x");
+  assert.equal(ctx.eventView(event("ignite_failed", 0, { label: "GPT", detail: "Ignition failed: x" })).detail, "Ignition failed: x");
 
   const paused = (params) => ctx.eventView(event("ignite_paused", 0, { level: "error", label: "Gemini", params }));
-  assert.equal(paused({ reason: "auth", error: json, summary: "凭证已失效" }).detail, "ev_paused_auth(凭证已失效)");
+  assert.equal(paused({ reason: "auth", error: json, summary: "Credential expired" }).detail, "ev_paused_auth(Credential expired)");
   view = paused({ reason: "suspended", error: json });
   assert.equal(view.detail, "ev_paused_suspended(HTTP 401 · UNAUTHENTICATED · token expired)");
   assert.equal(view.tip, "ev_paused_suspended(" + json + ")");
-  assert.equal(paused({ reason: "rate_limited", until: "2026-11-17T00:00:00Z", error: "x", summary: "请求过多" }).detail, "ev_paused(11-17T00:00|请求过多)");
+  assert.equal(paused({ reason: "rate_limited", until: "2026-11-17T00:00:00Z", error: "x", summary: "Too many requests" }).detail, "ev_paused(11-17T00:00|Too many requests)");
   assert.equal(paused({ until: "2026-11-17T00:00:00Z", error: "boom" }).detail, "ev_paused(11-17T00:00|boom)");
   // Without an end time or a known reason, no "until —".
   assert.equal(paused({ error: "boom" }).detail, "boom");
@@ -1008,10 +1008,10 @@ test("a credential problem shares its row with the ignition pause and the notifi
   const g = { group: "claude:k", label: "Claude" };
   const until = "2026-11-16T23:00:00Z";
   const events = [
-    event("notify", 1800, { ...g, params: { title: "⏳ Claude 被限流", notify_kind: "rate_limited" } }),
-    event("notify_failed", 30, { ...g, level: "warn", params: { title: "⚠️ Claude 点火已暂停", notify_kind: "circuit", error: "Bark: 500" } }),
-    event("credential_invalid", 0, { ...g, level: "error", params: { reason: "rate_limited", status: "429", summary: "请求过多", until, source: "ignite" } }),
-    event("ignite_paused", 0, { ...g, level: "error", params: { until, error: '{"error":{"code":429,"message":"Number of requests has exceeded your rate limit"}}', summary: "请求过多" } }),
+    event("notify", 1800, { ...g, params: { title: "⏳ Claude rate limited", notify_kind: "rate_limited" } }),
+    event("notify_failed", 30, { ...g, level: "warn", params: { title: "⚠️ Claude ignition paused", notify_kind: "circuit", error: "Bark: 500" } }),
+    event("credential_invalid", 0, { ...g, level: "error", params: { reason: "rate_limited", status: "429", summary: "Too many requests", until, source: "ignite" } }),
+    event("ignite_paused", 0, { ...g, level: "error", params: { until, error: '{"error":{"code":429,"message":"Number of requests has exceeded your rate limit"}}', summary: "Too many requests" } }),
     // Another group's pause stays its own row.
     event("ignite_paused", 10, { group: "gemini:k", label: "Gemini", level: "error", params: { until, error: "x" } }),
   ];
@@ -1024,36 +1024,36 @@ test("a credential problem shares its row with the ignition pause and the notifi
   assert.deepEqual(plain(row.pushes.map((ev) => ev.params.notify_kind).sort()), ["circuit", "rate_limited"]);
   const view = ctx.eventView(row.event, row.notifyKind, row.paused);
   assert.equal(view.badge, "ev_credential_rate_limited");
-  assert.equal(view.detail, "ev_ignite_paused_until(请求过多|11-16T23:00)");
+  assert.equal(view.detail, "ev_ignite_paused_until(Too many requests|11-16T23:00)");
   // The tooltip adds the full error of the pause on a line of its own.
-  assert.equal(view.tip, 'HTTP 429 · 请求过多\n{"error":{"code":429,"message":"Number of requests has exceeded your rate limit"}}');
+  assert.equal(view.tip, 'HTTP 429 · Too many requests\n{"error":{"code":429,"message":"Number of requests has exceeded your rate limit"}}');
   // A pause more than PAUSE_PAIR seconds away is a row of its own.
   assert.equal(ctx.eventRows([events[2], { ...events[3], time: new Date((T0 - 61) * 1000).toISOString() }], false).rows.length, 2);
   // Found by a query, without a pause: the rate limit alone.
-  assert.equal(ctx.eventView(event("credential_invalid", 0, { ...g, params: { reason: "rate_limited", summary: "请求过多", until, source: "query" } })).detail,
-    "ev_limited_until(请求过多|11-16T23:00)");
+  assert.equal(ctx.eventView(event("credential_invalid", 0, { ...g, params: { reason: "rate_limited", summary: "Too many requests", until, source: "query" } })).detail,
+    "ev_limited_until(Too many requests|11-16T23:00)");
   // An account suspended at ignition: one row too.
   const suspended = ctx.eventRows([
-    event("credential_invalid", 0, { ...g, params: { reason: "suspended", summary: "停用", source: "ignite" } }),
-    event("ignite_paused", 0, { ...g, params: { reason: "suspended", error: "x", summary: "停用" } }),
+    event("credential_invalid", 0, { ...g, params: { reason: "suspended", summary: "Suspended", source: "ignite" } }),
+    event("ignite_paused", 0, { ...g, params: { reason: "suspended", error: "x", summary: "Suspended" } }),
   ], false);
   assert.equal(suspended.rows.length, 1);
   const merged = ctx.eventView(suspended.rows[0].event, undefined, suspended.rows[0].paused);
-  assert.equal(merged.detail, "ev_ignite_paused_note(停用)");
+  assert.equal(merged.detail, "ev_ignite_paused_note(Suspended)");
   // With an appeal address, the pause's error follows it; a pause without
   // an error adds nothing.
-  const appeal = { reason: "suspended", status: "403", summary: "停用", appeal_url: "https://appeal.example.com/", source: "ignite" };
+  const appeal = { reason: "suspended", status: "403", summary: "Suspended", appeal_url: "https://appeal.example.com/", source: "ignite" };
   const withPause = (error) => ctx.eventView(event("credential_invalid", 0, { ...g, params: appeal }), undefined,
-    event("ignite_paused", 0, { ...g, params: error ? { reason: "suspended", error, summary: "停用" } : { reason: "suspended", summary: "停用" } }));
-  assert.equal(withPause("raw").tip, "HTTP 403 · 停用\nhttps://appeal.example.com/\nraw");
-  assert.equal(withPause("").tip, "HTTP 403 · 停用\nhttps://appeal.example.com/");
+    event("ignite_paused", 0, { ...g, params: error ? { reason: "suspended", error, summary: "Suspended" } : { reason: "suspended", summary: "Suspended" } }));
+  assert.equal(withPause("raw").tip, "HTTP 403 · Suspended\nhttps://appeal.example.com/\nraw");
+  assert.equal(withPause("").tip, "HTTP 403 · Suspended\nhttps://appeal.example.com/");
 });
 
 test("Did Codex Reset notifications join the event recorded after them", () => {
   const ctx = eventContext();
   const signal = (at) => event("codex_reset", at, { label: "Did Codex Reset", params: { count: "1" } });
-  const push = (at, fields = {}) => event("notify", at, { params: { title: "✅ Codex 全局重置已完成", notify_kind: "codex_reset" }, ...fields });
-  let built = ctx.eventRows([signal(10), push(5), push(0, { params: { title: "📅 Codex 全局重置已排期" } })], false);
+  const push = (at, fields = {}) => event("notify", at, { params: { title: "✅ Codex global reset completed", notify_kind: "codex_reset" }, ...fields });
+  let built = ctx.eventRows([signal(10), push(5), push(0, { params: { title: "📅 Codex global reset scheduled" } })], false);
   assert.equal(built.rows.length, 1);
   assert.equal(built.rows[0].event.kind, "codex_reset");
   assert.equal(built.rows[0].pushes.length, 2);
@@ -1063,7 +1063,7 @@ test("Did Codex Reset notifications join the event recorded after them", () => {
   assert.equal(built.rows.length, 2);
   const view = ctx.eventView(built.rows[1].event, built.rows[1].notifyKind);
   assert.equal(view.label, "Did Codex Reset");
-  assert.equal(view.detail, "✅ Codex 全局重置已完成");
+  assert.equal(view.detail, "✅ Codex global reset completed");
 });
 
 test("older failure events without params hide their whole detail when masked", () => {
@@ -1072,10 +1072,10 @@ test("older failure events without params hide their whole detail when masked", 
   // A manual ignition failure from before params, naming an account that
   // has since been removed: no name list can catch it.
   const old = [
-    event("ignite_failed", 0, { group: "claude:k", label: "Claude", level: "warn", detail: "手动点火失败：permission denied for gone@example.com" }),
-    event("ignite_paused", 0, { group: "claude:k", label: "Claude", level: "error", detail: "暂停到 11/17：gone@example.com" }),
-    event("notify_failed", 0, { group: "claude:k", label: "Claude", level: "warn", detail: "Bark：gone@example.com" }),
-    event("error", 0, { level: "error", label: "Claude", detail: "额度查询失败：gone@example.com" }),
+    event("ignite_failed", 0, { group: "claude:k", label: "Claude", level: "warn", detail: "Manual ignition failed: permission denied for gone@example.com" }),
+    event("ignite_paused", 0, { group: "claude:k", label: "Claude", level: "error", detail: "Paused until 11/17: gone@example.com" }),
+    event("notify_failed", 0, { group: "claude:k", label: "Claude", level: "warn", detail: "Bark: gone@example.com" }),
+    event("error", 0, { level: "error", label: "Claude", detail: "Quota query failed: gone@example.com" }),
   ];
   for (const ev of old) {
     const view = ctx.eventView(ev);
@@ -1085,13 +1085,13 @@ test("older failure events without params hide their whole detail when masked", 
     assert.ok(nodes.detail.some((n) => n.text.includes("gone@example.com")), ev.kind);
   }
   // An older success keeps its detail, with only the names hidden.
-  const ok = event("ignite", 0, { group: "claude:k", label: "Claude", detail: "claude-haiku · 下次重置 11/17" });
+  const ok = event("ignite", 0, { group: "claude:k", label: "Claude", detail: "claude-haiku · next reset 11/17" });
   assert.equal(ctx.eventView(ok).whole, false);
-  assert.equal(plainText(ctx.eventMasked(ok).detail), "claude-haiku · 下次重置 11/17");
+  assert.equal(plainText(ctx.eventMasked(ok).detail), "claude-haiku · next reset 11/17");
   // An older success without a stored label hides whole too, even when its
   // group gives a label now: the account may have been renamed since.
   const ctx2 = eventContext({ status: { accounts: [{ groups: [{ key: "claude:k", label: "Claude Now" }] }] } });
-  const unlabeled = event("ignite", 0, { group: "claude:k", message: "Claude Old 点火成功（claude-haiku），下次重置 11/17" });
+  const unlabeled = event("ignite", 0, { group: "claude:k", message: "Claude Old Ignition succeeded (claude-haiku), next reset 11/17" });
   const view = ctx2.eventView(unlabeled);
   assert.equal(view.label, "Claude Now");
   assert.ok(view.whole);
@@ -1187,7 +1187,7 @@ function fakeStorage(items = {}) {
 }
 
 test("expanded groups are kept in this browser while their switch is on", () => {
-  const STORE = "lamplighter-chart-expanded", FILTERS = "lamplighter-chart-filters";
+  const STORE = "cpa-pulse-chart-expanded", FILTERS = "cpa-pulse-chart-filters";
   const elements = { remember_chart_expanded: { name: "remember_chart_expanded", checked: true }, remember_chart_filters: { name: "remember_chart_filters", checked: false } };
   const storage = fakeStorage({ [STORE]: JSON.stringify(["claude|Claude", "codex|gone", 3, ""]), [FILTERS]: "{}" });
   const ctx = context(["rememberChart", "rememberExpanded", "expandedGroups", "storedExpanded", "writeExpanded", "saveGroupExpanded",
@@ -1274,13 +1274,13 @@ test("the public MCP address accepts only http and https addresses", () => {
   assert.ok(cases.length > 30);
   for (const [value, want] of cases) assert.equal(url.publicUrl(value), want, JSON.stringify(value));
 
-  const STORE = "lamplighter-mcp-url";
+  const STORE = "cpa-pulse-mcp-url";
   const storage = fakeStorage();
   const field = { value: "" };
   let renders = 0;
   const base = context(["publicUrl", "storedPublicUrl", "savePublicUrl", "syncPublicUrl", "mcpBaseUrl"], {
-    $: (id) => (id === "mcp-public-url" ? field : { elements: { mcp_listen: { value: "0.0.0.0:8318" } } }),
-    status: null, MCP_LISTEN: "127.0.0.1:8318", MCP_URL_STORE: STORE, location: { hostname: "nas" },
+    $: (id) => (id === "mcp-public-url" ? field : { elements: { mcp_listen: { value: "0.0.0.0:8319" } } }),
+    status: null, MCP_LISTEN: "127.0.0.1:8319", MCP_URL_STORE: STORE, location: { hostname: "nas" },
     localStorage: storage, renderMcp: () => { renders++; },
   });
   for (const name of ["PUBLIC_URL_TRIM", "PUBLIC_URL_FORM"]) vm.runInContext(pageVar(name), base);
@@ -1288,11 +1288,11 @@ test("the public MCP address accepts only http and https addresses", () => {
   assert.equal(base.mcpBaseUrl(), "https://mcp.example.com");
   base.savePublicUrl("  ");
   assert.equal(STORE in storage.items, false, "an empty address is deleted");
-  assert.equal(base.mcpBaseUrl(), "http://nas:8318");
+  assert.equal(base.mcpBaseUrl(), "http://nas:8319");
   base.savePublicUrl("ftp://x.com");
-  assert.equal(base.mcpBaseUrl(), "http://nas:8318", "an invalid address falls back to the listen address");
+  assert.equal(base.mcpBaseUrl(), "http://nas:8319", "an invalid address falls back to the listen address");
   // /mcp comes off the path only, never off a host named mcp.
-  for (const [value, want] of [["mcp", "https://mcp"], ["mcp/", "https://mcp"], ["mcp/mcp", "https://mcp"], ["http://mcp:8318/mcp/", "http://mcp:8318"],
+  for (const [value, want] of [["mcp", "https://mcp"], ["mcp/", "https://mcp"], ["mcp/mcp", "https://mcp"], ["http://mcp:8319/mcp/", "http://mcp:8319"],
     ["https://x.com/a/mcp//", "https://x.com/a"], ["https://x.com/mcpx", "https://x.com/mcpx"], ["https://x.com/a/", "https://x.com/a"]]) {
     base.savePublicUrl(value);
     assert.equal(base.mcpBaseUrl(), want, value);
@@ -1311,7 +1311,7 @@ test("the public MCP address accepts only http and https addresses", () => {
   base.savePublicUrl("https://new.example.com");
   field.value = "https://old.example.com";
   assert.equal(base.mcpBaseUrl(), "https://new.example.com");
-  base.syncPublicUrl("lamplighter-view");
+  base.syncPublicUrl("cpa-pulse-view");
   assert.equal(field.value, "https://old.example.com");
   assert.equal(renders, 0);
   base.syncPublicUrl(STORE);
@@ -1319,7 +1319,7 @@ test("the public MCP address accepts only http and https addresses", () => {
   delete storage.items[STORE];
   base.syncPublicUrl(null);
   assert.equal(field.value, "");
-  assert.equal(base.mcpBaseUrl(), "http://nas:8318");
+  assert.equal(base.mcpBaseUrl(), "http://nas:8319");
   assert.equal(renders, 2);
   assert.match(source.match(/window\.addEventListener\("storage", function \(e\) \{[^]*?\n  \}\);/)[0], /syncPublicUrl\(e\.key\);/);
   // Without localStorage the field is used.
@@ -1340,7 +1340,7 @@ test("the client commands quote the address and the key for the shell, and the J
   assert.equal(ctx.shellQuote("a'b"), "'a'\\''b'");
   // The shell reads each command back as the words it was built from.
   const words = (command) => execFileSync("sh", ["-c", "for w in " + command.replace(/^\S+ /, "") + "; do printf '%s\\n' \"$w\"; done"], { encoding: "utf8" }).trim().split("\n");
-  assert.deepEqual(words(snippets.mcp_claude), ["mcp", "add", "--transport", "http", "lamplighter", url, "--header", "Authorization: Bearer " + secret]);
+  assert.deepEqual(words(snippets.mcp_claude), ["mcp", "add", "--transport", "http", "cpa-pulse", url, "--header", "Authorization: Bearer " + secret]);
   assert.deepEqual(words(snippets.mcp_stdio), ["mcp-remote", url, "--header", "Authorization: Bearer " + secret]);
-  assert.deepEqual(JSON.parse(snippets.mcp_json), { mcpServers: { lamplighter: { type: "http", url, headers: { Authorization: "Bearer " + secret } } } });
+  assert.deepEqual(JSON.parse(snippets.mcp_json), { mcpServers: { "cpa-pulse": { type: "http", url, headers: { Authorization: "Bearer " + secret } } } });
 });

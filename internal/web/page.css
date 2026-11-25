@@ -419,11 +419,9 @@ details summary { cursor: pointer; color: var(--text-secondary); font-size: 13px
 /* Events: fixed columns so time, type, group and detail line up. */
 .events { display: flex; flex-direction: column; }
 .event-row {
-  display: grid; grid-template-columns: 92px var(--event-type-width, 86px) 132px minmax(0, 1fr); gap: 12px; align-items: center;
+  display: grid; grid-template-columns: 92px 140px 132px minmax(0, 1fr); gap: 12px; align-items: center;
   padding: 8px 0; border-bottom: 1px solid var(--border-color); font-size: 13px;
 }
-/* English event types such as "Notification failed" need a wider column. */
-html[lang="en"] { --event-type-width: 140px; }
 .event-row:last-child { border-bottom: none; }
 .event-time { color: var(--text-tertiary); font-family: var(--font-mono); font-size: 12px; font-variant-numeric: tabular-nums; }
 .event-type .badge { font-size: 11.5px; padding: 1px 8px; }

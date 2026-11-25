@@ -30,7 +30,7 @@ jobs:
       - run: sh scripts/ci-build.sh ${{ matrix.arch }}
       - uses: actions/upload-artifact@v7
         with:
-          name: lamplighter-linux-${{ matrix.arch }}
+          name: cpa-pulse-linux-${{ matrix.arch }}
           path: dist/
 
   # One job builds both architectures; the runner is arm64 and cross-compiles amd64.
@@ -50,11 +50,11 @@ jobs:
           sh scripts/ci-build.sh arm64 && mv dist dist-arm64
       - uses: actions/upload-artifact@v7
         with:
-          name: lamplighter-darwin-amd64
+          name: cpa-pulse-darwin-amd64
           path: dist-amd64/
       - uses: actions/upload-artifact@v7
         with:
-          name: lamplighter-darwin-arm64
+          name: cpa-pulse-darwin-arm64
           path: dist-arm64/
 
   build-windows:
@@ -74,7 +74,7 @@ jobs:
       - run: sh scripts/ci-build.sh amd64
       - uses: actions/upload-artifact@v7
         with:
-          name: lamplighter-windows-amd64
+          name: cpa-pulse-windows-amd64
           path: dist/
 
   release:
@@ -94,9 +94,9 @@ jobs:
         run: |
           VERSION=${GITHUB_REF_NAME#v}
           mkdir dist
-          for dir in artifacts/lamplighter-*; do
-            platform=${dir#artifacts/lamplighter-}
-            zip -j -q "dist/lamplighter_${VERSION}_${platform%-*}_${platform##*-}.zip" "$dir"/*
+          for dir in artifacts/cpa-pulse-*; do
+            platform=${dir#artifacts/cpa-pulse-}
+            zip -j -q "dist/cpa-pulse_${VERSION}_${platform%-*}_${platform##*-}.zip" "$dir"/*
           done
           cd dist
           sha256sum *.zip > checksums.txt

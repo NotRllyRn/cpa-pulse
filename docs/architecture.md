@@ -2,7 +2,7 @@
 
 [Usage](usage.md) · [Configuration](configuration.md) · [Development](development.md)
 
-cpa-pulse is a Go native plugin built with `-buildmode=c-shared`. CPA loads the library and calls `cliproxy_plugin_init`. Subsequent calls use JSON RPC envelopes in both directions. The runtime ID, configuration subtree, routes and data directory retain `lamplighter` for compatibility.
+cpa-pulse is a Go native plugin built with `-buildmode=c-shared`. CPA loads the library and calls `cliproxy_plugin_init`. Subsequent calls use JSON RPC envelopes in both directions. The Go module is `github.com/NotRllyRn/cpa-pulse`; the runtime plugin ID is `cpa-pulse` and configuration lives under `plugins.configs.cpa-pulse`.
 
 ## Modules
 
@@ -31,21 +31,21 @@ cpa-pulse is a Go native plugin built with `-buildmode=c-shared`. CPA loads the 
 
 | Method and path | Purpose |
 | --- | --- |
-| `GET /v0/management/lamplighter/status` | Account, quota, schedule and redacted configuration snapshots; `providers` lists IDs, titles, ignition capability, model hints and selectable groups; `group_order` sets quota-group order; windows include `kind` for `5h` and `7d` |
-| `GET /v0/management/lamplighter/history` | History and ignition events; accepts `range` and `window`, described below |
-| `POST /v0/management/lamplighter/refresh` | Active refresh; `{"auth_index":"..."}` selects one account |
-| `POST /v0/management/lamplighter/ignite` | Manual ignition; `{"target":"<quota-group key>"}` |
-| `POST /v0/management/lamplighter/test-notify` | Test all configured channels; each `results` entry has `channel`, `ok` and `error`; webhook entries add `response` (first 200 characters) and `unchecked` when only HTTP status was checked |
-| `POST /v0/management/lamplighter/language` | Compatibility endpoint for notification language; notifications use English |
-| `POST /v0/management/lamplighter/check-update` | Check the latest release and return status |
+| `GET /v0/management/cpa-pulse/status` | Account, quota, schedule and redacted configuration snapshots; `providers` lists IDs, titles, ignition capability, model hints and selectable groups; `group_order` sets quota-group order; windows include `kind` for `5h` and `7d` |
+| `GET /v0/management/cpa-pulse/history` | History and ignition events; accepts `range` and `window`, described below |
+| `POST /v0/management/cpa-pulse/refresh` | Active refresh; `{"auth_index":"..."}` selects one account |
+| `POST /v0/management/cpa-pulse/ignite` | Manual ignition; `{"target":"<quota-group key>"}` |
+| `POST /v0/management/cpa-pulse/test-notify` | Test all configured channels; each `results` entry has `channel`, `ok` and `error`; webhook entries add `response` (first 200 characters) and `unchecked` when only HTTP status was checked |
+| `POST /v0/management/cpa-pulse/language` | Compatibility endpoint for notification language; notifications use English |
+| `POST /v0/management/cpa-pulse/check-update` | Check the latest release and return status |
 
-The page resource is `GET /v0/resource/plugins/lamplighter/page`, with the menu title `cpa-pulse`. The resource is public, but its data requests carry the management key. The page reads `cli-proxy-auth` from Management Center local storage: `enc::v2::` uses reversible XOR based on `location.host`, `enc::v1::` also uses User-Agent, and unprefixed values are plain JSON. If no key is found, the page asks for one and keeps it in session storage.
+The page resource is `GET /v0/resource/plugins/cpa-pulse/page`, with the menu title `cpa-pulse`. The resource is public, but its data requests carry the management key. The page reads `cli-proxy-auth` from Management Center local storage: `enc::v2::` uses reversible XOR based on `location.host`, `enc::v1::` also uses User-Agent, and unprefixed values are plain JSON. If no key is found, the page asks for one and keeps it in session storage under `cpa-pulse-management-key`.
 
 History accepts `range=1h|3h|6h|12h|24h|26h|4d|8d|15d|1mo|36d`, default `24h`. `window=5h|7d` filters series; an omitted or unrecognized value returns all windows. Ignition events are not window-filtered. The chart's one-day option also uses `24h`. A month starts on the same date in the previous month in the plugin time zone, clamped to that month's last day. Each series can include its last sample before the range, up to one day earlier (`historyLead`), so the page can clip the line at the left edge. A series without in-range samples is omitted. See [Storage](#storage) for downsampling and reset records.
 
 ### Configuration saves
 
-Settings use CPA's `PATCH /v0/management/plugins/lamplighter/config`. Switches save on change, text and numbers on blur or Enter. Only affected top-level keys are patched. CPA merges only the top level, so nested objects such as `ignition`, `providers` and notification modes are submitted whole using the last saved object as the base. Saves run serially. The three thresholds are validated and saved together. Invalid numeric ranges or steps prevent saving. URL trailing slashes are removed; empty CPA and MCP addresses are normalized to backend defaults.
+Settings use CPA's `PATCH /v0/management/plugins/cpa-pulse/config`. Switches save on change, text and numbers on blur or Enter. Only affected top-level keys are patched. CPA merges only the top level, so nested objects such as `ignition`, `providers` and notification modes are submitted whole using the last saved object as the base. Saves run serially. The three thresholds are validated and saved together. Invalid numeric ranges or steps prevent saving. URL trailing slashes are removed; empty CPA and MCP addresses are normalized to backend defaults.
 
 The model API-key field rejects the management key. Other nonempty values are checked with `GET /v1/models`; 401 or 403 prevents saving, while other responses or transport failures permit saving. Browser autofill detected while the field lacks focus is ignored and restored to the saved value. The field uses `autocomplete="one-time-code"` and password-manager skip attributes to avoid unwanted credential insertion. Rejected edits retain their drafts and errors.
 
@@ -63,7 +63,7 @@ Names use CPA's `PATCH /v0/management/auth-files/fields` to replace the first li
 
 Account rows reuse DOM by credential filename to preserve focus and drafts through refresh and reordering. Save results are keyed independently from DOM bindings; rebuilding a row restores its drafts, failures and pending count. Drag handles use Pointer Events, a fixed-position clone, midpoint hit testing and 180 ms FLIP movement. Dropping saves `account_order`; Esc or `pointercancel` restores the original order. Rendering waits until dragging finishes, and reduced-motion preferences suppress animation.
 
-The page stores its view in `lamplighter-view`, blur state in `lamplighter-mask-accounts`, optional MCP public URL in `lamplighter-mcp-url`, chart filters in `lamplighter-chart-filters` and expanded groups in `lamplighter-chart-expanded`. These browser keys retain the runtime ID for compatibility. Filters keep a range per window; expanded group IDs use `provider|source_label` and one shared set for both windows. Updates reread the stored list before changing one group to preserve other tabs' edits. Disabling a remember switch removes its stored choices; enabling merges the current selection. Restoration happens after configuration loads and before the first history request.
+The page stores its view in `cpa-pulse-view`, blur state in `cpa-pulse-mask-accounts`, optional MCP public URL in `cpa-pulse-mcp-url`, chart filters in `cpa-pulse-chart-filters` and expanded groups in `cpa-pulse-chart-expanded`. Filters keep a range per window; expanded group IDs use `provider|source_label` and one shared set for both windows. Updates reread the stored list before changing one group to preserve other tabs' edits. Disabling a remember switch removes its stored choices; enabling merges the current selection. Restoration happens after configuration loads and before the first history request.
 
 Blur state is applied to the root before first render. HTML account identifiers use `.account-sensitive` and CSS blur; SVG text uses a filter. Sensitive values include current identifiers, retained event/history labels and internal group IDs of orphan history. Orphan rows are blurred across overview, detail, table and screenshots and use account numbers for accessibility labels. Error summaries and raw errors are blurred whole. Legacy warning/error details without structured parameters are also blurred whole because account names may no longer be known. Sensitive hover text is omitted while blurred. Confirmation dialogs retain original text; raw DOM and API data remain available.
 
@@ -81,7 +81,7 @@ The page uses English text. Existing history, account notes, upstream errors and
 
 Notification events attach to their triggering event using `NOTIFY_TRIGGERS`: recovery/reset, circuit/ignition pause, cooldown/stale cooldown, plan/plan change, credential variants/credential invalid, credential recovery/credential restored, and reset signal/reset signal. They must match group, or label when no group exists; reset signals require no group. The nearest trigger is selected within 70 minutes after the event, or within five minutes either way for reset signals, whose notification precedes recording. Recovery `windows` matches individual window IDs; old recovery records without it can attach to same-group resets within 60 seconds. Unmatched notifications and quota/reminder notifications remain separate rows. Legacy kinds are inferred from titles.
 
-Five-hour reset events and their notifications are hidden by default, controlled by `lamplighter-events-5h`; exhaustion events always show. Errors use `params.summary` or a parsed first-line summary, truncated to 160 characters, with full details on hover. Manual failures omit retry text. Credential invalid events show authentication, suspension or rate-limit badges. A same-group ignition pause within 60 seconds (`PAUSE_PAIR`) is merged into the nearest credential event. Details include suspension/authentication state or pause/limit end time; hover adds status, code, summary, appeal URL and merged error. Appeal links must use HTTP or HTTPS; sensitive hover details are hidden while blurred.
+Five-hour reset events and their notifications are hidden by default, controlled by `cpa-pulse-events-5h`; exhaustion events always show. Errors use `params.summary` or a parsed first-line summary, truncated to 160 characters, with full details on hover. Manual failures omit retry text. Credential invalid events show authentication, suspension or rate-limit badges. A same-group ignition pause within 60 seconds (`PAUSE_PAIR`) is merged into the nearest credential event. Details include suspension/authentication state or pause/limit end time; hover adds status, code, summary, appeal URL and merged error. Appeal links must use HTTP or HTTPS; sensitive hover details are hidden while blurred.
 
 Themes reuse the Management Center CSS variables from `src/styles/themes.scss` for light, pure-white and dark. `quotaLevel` shares five levels across bars and charts: full near 100%, empty near 0% (`LEVEL_EPSILON=1e-6`), then high/medium/low split at the first two alert thresholds. Classification uses raw values before rounding. The page follows the parent root's `data-theme`, or `cli-proxy-theme` when standalone. Segmented selectors share measured thumb positioning via `placeThumb` and `ResizeObserver`; only deliberate user selection animates, and reduced-motion rules suppress it.
 
@@ -354,7 +354,7 @@ Times use `scheduleWindow`, falling back to `effectiveAt`. Equal endpoints displ
 
 ## Storage
 
-The default directory is `<plugins.dir>/data/lamplighter`. `DefaultDataDir` reads CPA `plugins.dir` (default `plugins`), expands leading `~` and resolves relative paths against CPA's working directory. It cannot use the loaded library path: CPA loads temporary copies under `cliproxy-pluginhost/pid-<pid>/`, which do not survive restarts.
+The default directory is `<plugins.dir>/data/cpa-pulse`. `DefaultDataDir` reads CPA `plugins.dir` (default `plugins`), expands leading `~` and resolves relative paths against CPA's working directory. It cannot use the loaded library path: CPA loads temporary copies under `cliproxy-pluginhost/pid-<pid>/`, which do not survive restarts.
 
 | File | Contents |
 | --- | --- |

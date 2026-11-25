@@ -2,7 +2,7 @@
 
 [Usage](usage.md) · [MCP](mcp.md)
 
-All plugin settings live under `plugins.configs.lamplighter` in `config.yaml`. CPA also requires global `plugins.enabled: true` and the plugin entry's `enabled: true`; CPA owns these enablement switches. On the management page, use the "Quota | Settings" switch at the top to open the settings view. Switches and checkboxes save when clicked; text and numbers save when you leave the field or press Enter. Save results appear to the right of section headings, or beside each group legend under "Advanced". The three alert thresholds save together and must be in descending order, with equal values allowed. Changes apply without a restart. A saved field shows "Saved; waiting to take effect", then "In effect" after the plugin confirms it; confirmation waits at most 15 seconds after the save succeeds, even if status requests hang. If still unconfirmed at the deadline, it shows "Not confirmed in effect"; a late confirmation does not change that wait result.
+All plugin settings live under `plugins.configs.cpa-pulse` in `config.yaml`. CPA also requires global `plugins.enabled: true` and the plugin entry's `enabled: true`; CPA owns these enablement switches. On the management page, use the "Quota | Settings" switch at the top to open the settings view. Switches and checkboxes save when clicked; text and numbers save when you leave the field or press Enter. Save results appear to the right of section headings, or beside each group legend under "Advanced". The three alert thresholds save together and must be in descending order, with equal values allowed. Changes apply without a restart. A saved field shows "Saved; waiting to take effect", then "In effect" after the plugin confirms it; confirmation waits at most 15 seconds after the save succeeds, even if status requests hang. If still unconfirmed at the deadline, it shows "Not confirmed in effect"; a late confirmation does not change that wait result.
 
 With no failures, the heading shows the most recent save's progress. A failed save takes priority, with the field name and reason; failed controls have red borders and keep their input drafts. Saving another item cannot hide the failure; it clears only when the failed item saves successfully. For multiple failures, the latest reason is shown with the number of other failures. On narrow screens, only "Save failed" and the failure count remain visible; field names and reasons are hidden to keep long text out of the heading. Editing revokes older requests' ability to update that item's result, so late responses and confirmations cannot overwrite later edits. Unresolved failures remain visible. MCP settings also show why the endpoint failed to start.
 
@@ -31,10 +31,10 @@ With no failures, the heading shows the most recent save's progress. A failed sa
 | `account_weights` | empty | The weight of each account in the total of several accounts, keyed by credential file name, a number above 0; accounts without one use the [plan default](usage.md#features) |
 | `account_order` | empty | Account order by credential file name; unlisted accounts follow in default order and missing entries are ignored |
 | `mcp_enabled` | `false` | Enable the independent MCP server, see [MCP](mcp.md) |
-| `mcp_listen` | `127.0.0.1:8318` | MCP listen address |
+| `mcp_listen` | `127.0.0.1:8319` | MCP listen address |
 | `mcp_key` | empty | Dedicated MCP Bearer key; empty prevents listening |
 | `config_token` | empty | Configuration acknowledgment token generated on each page save; usually no manual setting is needed. See [Architecture](architecture.md#cpa-interface) |
-| `data_dir` | `data/lamplighter` in the plugin directory | State and history directory |
+| `data_dir` | `data/cpa-pulse` in the plugin directory | State and history directory |
 
 A valid IANA `timezone` takes precedence over a fixed offset; an invalid name falls back to the offset or CPA process time zone.
 
@@ -96,7 +96,7 @@ Example configuration:
 ```yaml
 plugins:
   configs:
-    lamplighter:
+    cpa-pulse:
       enabled: true
       bark_url: "https://api.day.app/your_device_key"
       models_api_key: "new key for cpa-pulse"
@@ -159,7 +159,7 @@ Placeholders are escaped for where they appear: URL-encoded in the URL; JSON-str
 Without `body`, the webhook receives this JSON:
 
 ```json
-{"source":"lamplighter","kind":"quota","title":"🔴 GPT#rk · 5h 8% | 03h","body":"5h: 8% | 03h | 10/10 Sat 19:00\n7d: 60% | 04d | 10/14 Wed 09:00","text":"…","url":"","priority":"high","label":"GPT#rk","time":"2026-10-10T16:00:00+08:00"}
+{"source":"cpa-pulse","kind":"quota","title":"🔴 GPT#rk · 5h 8% | 03h","body":"5h: 8% | 03h | 10/10 Sat 19:00\n7d: 60% | 04d | 10/14 Wed 09:00","text":"…","url":"","priority":"high","label":"GPT#rk","time":"2026-10-10T16:00:00+08:00"}
 ```
 
 Settings for common services follow. They are format examples based on each service's documentation and have not all been tested.
@@ -179,7 +179,7 @@ For Feishu, `config.yaml` looks like this. The body contains `{{`, so put it in 
 ```yaml
 plugins:
   configs:
-    lamplighter:
+    cpa-pulse:
       webhook:
         url: "https://open.feishu.cn/open-apis/bot/v2/hook/<token>"
         body: '{"msg_type":"text","content":{"text":"{{text}}"}}'
