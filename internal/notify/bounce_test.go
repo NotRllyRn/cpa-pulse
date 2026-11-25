@@ -61,7 +61,7 @@ func TestWeeklyBounceAfterResetNotifiesOnce(t *testing.T) {
 		t.Fatalf("want one recovery, got %+v", sender.sent)
 	}
 	msg := sender.sent[0]
-	if msg.Kind != KindRecovery || msg.Title != "✅ Gemini · 7d 已恢复" || msg.Group != bounceGroupKey ||
+	if msg.Kind != KindRecovery || msg.Title != "✅ Gemini · 7d recovered" || msg.Group != bounceGroupKey ||
 		len(msg.Windows) != 1 || msg.Windows[0] != "gemini-weekly" {
 		t.Fatalf("recovery %+v", msg)
 	}

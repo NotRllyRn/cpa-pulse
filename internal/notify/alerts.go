@@ -47,7 +47,7 @@ type Group struct {
 type Alerts struct {
 	Cfg    config.Config
 	Sender Sender
-	// Lang is the notification language, LangZH or LangEN.
+	// Lang is accepted for compatibility; notifications always use English.
 	Lang string
 	// OnSent is called for every delivered notification, for the event log.
 	OnSent func(msg Message)

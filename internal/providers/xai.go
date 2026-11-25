@@ -54,11 +54,11 @@ func fetchXAI(ctx context.Context, doer quota.Doer, cred Credential, _ time.Time
 func ParseXAIBilling(payload map[string]any) ([]quota.RawGroup, error) {
 	config, _ := payload["config"].(map[string]any)
 	if config == nil {
-		return nil, errors.New("Grok 未返回 config")
+		return nil, errors.New("Grok returned no config")
 	}
 	used, ok := floatValue(field(config, "creditUsagePercent", "credit_usage_percent"))
 	if !ok {
-		return nil, errors.New("Grok 未返回额度用量；按 API 用量计费的账号没有额度可查")
+		return nil, errors.New("Grok returned no quota usage; API usage billing accounts have no quota to query")
 	}
 	// The billing period is monthly and only describes the credits when the
 	// response has no current period.

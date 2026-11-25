@@ -12,7 +12,7 @@ import (
 
 // Window labels. Notifications shorten them with ShortLabel.
 const (
-	LabelFiveHour  = "5 小时"
+	LabelFiveHour  = "5 Hour"
 	LabelSevenDay  = "7 Day"
 	LabelFable     = "7 Day Fable 5"
 	WindowFiveHour = "five-hour"

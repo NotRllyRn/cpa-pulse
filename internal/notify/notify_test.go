@@ -65,7 +65,7 @@ func TestThresholdCrossingNotifiesWithResetHint(t *testing.T) {
 	if got := sender.sent[0].Title; got != "🟡 GPT#eg · 5h 26% | 05h" {
 		t.Fatalf("title %q", got)
 	}
-	if !regexp.MustCompile(`^5h：26% \| 05h \| \d\d/\d\d 周[日一二三四五六] \d\d:\d\d`).MatchString(sender.sent[0].Body) {
+	if !regexp.MustCompile(`^5h: 26% \| 05h \| \d\d/\d\d (Sun|Mon|Tue|Wed|Thu|Fri|Sat) \d\d:\d\d`).MatchString(sender.sent[0].Body) {
 		t.Fatalf("body %q", sender.sent[0].Body)
 	}
 	a.ProcessGroup(context.Background(), st, group(25, 80, now), now)
@@ -147,7 +147,7 @@ func TestResetReminders(t *testing.T) {
 	cfg.ResetReminder.FiveHour = config.ReminderAll
 	alerts(cfg, sender).ProcessGroup(context.Background(), st, soon, now)
 	alerts(cfg, sender).ProcessGroup(context.Background(), st, soon, now)
-	if len(sender.sent) != 1 || sender.sent[0].Title != "⏰ Claude · 5h 重置提醒" {
+	if len(sender.sent) != 1 || sender.sent[0].Title != "⏰ Claude · 5h resets soon" {
 		t.Fatalf("want one reminder, got %+v", sender.sent)
 	}
 }
@@ -195,11 +195,11 @@ func TestResetReminderModesPerWindow(t *testing.T) {
 		sevenDay  time.Duration
 		want      string
 	}{
-		{"5h only", config.WindowModes{FiveHour: config.ReminderAll, SevenDay: config.ReminderOff}, 50, 20 * time.Hour, "⏰ Claude · 5h 重置提醒"},
-		{"7d one day before", config.WindowModes{FiveHour: config.ReminderOff, SevenDay: config.ReminderAll}, 50, 20 * time.Hour, "⏰ Claude · 7d 重置提醒"},
+		{"5h only", config.WindowModes{FiveHour: config.ReminderAll, SevenDay: config.ReminderOff}, 50, 20 * time.Hour, "⏰ Claude · 5h resets soon"},
+		{"7d one day before", config.WindowModes{FiveHour: config.ReminderOff, SevenDay: config.ReminderAll}, 50, 20 * time.Hour, "⏰ Claude · 7d resets soon"},
 		{"7d not earlier", config.WindowModes{FiveHour: config.ReminderOff, SevenDay: config.ReminderAll}, 50, 30 * time.Hour, ""},
-		{"has remaining", config.WindowModes{FiveHour: config.ReminderHasRemaining, SevenDay: config.ReminderHasRemaining}, 11, 20 * time.Hour, "⏰ Claude · 5h / 7d 重置提醒"},
-		{"nothing left", config.WindowModes{FiveHour: config.ReminderHasRemaining, SevenDay: config.ReminderAll}, 10, 20 * time.Hour, "⏰ Claude · 7d 重置提醒"},
+		{"has remaining", config.WindowModes{FiveHour: config.ReminderHasRemaining, SevenDay: config.ReminderHasRemaining}, 11, 20 * time.Hour, "⏰ Claude · 5h / 7d resets soon"},
+		{"nothing left", config.WindowModes{FiveHour: config.ReminderHasRemaining, SevenDay: config.ReminderAll}, 10, 20 * time.Hour, "⏰ Claude · 7d resets soon"},
 	}
 	for _, tc := range cases {
 		cfg := config.Default()
@@ -254,13 +254,13 @@ func TestUnknownWindowKindFollowsItsResetDistance(t *testing.T) {
 
 func TestCompactDuration(t *testing.T) {
 	cases := map[time.Duration]string{
-		0:                            "可刷新",
+		0:                            "due",
 		30 * time.Minute:             "30m",
 		4*time.Hour + 40*time.Minute: "05h",
 		3 * 24 * time.Hour:           "03d",
 	}
 	for d, want := range cases {
-		if got := CompactDuration(d, LangZH); got != want {
+		if got := CompactDuration(d, ""); got != want {
 			t.Errorf("%v: got %q want %q", d, got, want)
 		}
 	}
@@ -275,7 +275,7 @@ func TestBarkRequestFormat(t *testing.T) {
 	}))
 	defer server.Close()
 	bark := &Bark{URL: server.URL + "/key/", Group: "CPA"}
-	err := bark.Send(context.Background(), Message{Title: "⚠️ A · 5h 26%", Body: "5h：26% | 05h", JumpURL: "https://x/y"})
+	err := bark.Send(context.Background(), Message{Title: "⚠️ A · 5h 26%", Body: "5h: 26% | 05h", JumpURL: "https://x/y"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -311,14 +311,14 @@ var resetNow = time.Date(2026, 10, 4, 0, 0, 0, 0, time.UTC)
 func TestResetFeedFirstRunOnlyNotifiesPending(t *testing.T) {
 	sender := &fakeSender{}
 	st := store.NewState()
-	sent := ProcessResetRecords(context.Background(), st, records(), true, sender, time.UTC, LangZH, resetNow)
-	if sent != 1 || sender.sent[0].Title != "📅 Codex 全局重置已排期" {
+	sent := ProcessResetRecords(context.Background(), st, records(), true, sender, time.UTC, "", resetNow)
+	if sent != 1 || sender.sent[0].Title != "📅 Codex global reset scheduled" {
 		t.Fatalf("got %d %+v", sent, sender.sent)
 	}
-	if sender.sent[0].JumpURL != "https://didcodexreset.com/zh/history/1791028800000.html" {
+	if sender.sent[0].JumpURL != "https://didcodexreset.com/history/1791028800000.html" {
 		t.Fatalf("jump url %q", sender.sent[0].JumpURL)
 	}
-	if again := ProcessResetRecords(context.Background(), st, records(), true, sender, time.UTC, LangZH, resetNow); again != 0 {
+	if again := ProcessResetRecords(context.Background(), st, records(), true, sender, time.UTC, "", resetNow); again != 0 {
 		t.Fatal("seen records must not be sent again")
 	}
 }
@@ -327,17 +327,17 @@ func TestResetFeedNewRecordAndManualIDRotation(t *testing.T) {
 	sender := &fakeSender{}
 	st := store.NewState()
 	manual := ResetRecord{"id": "manual:a", "kind": "reset_completed", "resetType": "banked", "announcedAt": "2026-09-01T00:00:00Z"}
-	ProcessResetRecords(context.Background(), st, append(records(), manual), false, sender, time.UTC, LangZH, resetNow)
+	ProcessResetRecords(context.Background(), st, append(records(), manual), false, sender, time.UTC, "", resetNow)
 	if len(sender.sent) != 0 {
 		t.Fatal("first run without pending notification sends nothing")
 	}
 	rotated := ResetRecord{"id": "manual:b", "kind": "reset_completed", "resetType": "banked", "announcedAt": "2026-09-01T00:00:00Z"}
 	fresh := ResetRecord{"id": "r4", "kind": "reset_completed", "resetType": "global", "effectiveAt": "2026-10-06T00:00:00Z"}
 	next := append([]ResetRecord{fresh}, append(records(), rotated)...)
-	if sent := ProcessResetRecords(context.Background(), st, next, false, sender, time.UTC, LangZH, resetNow); sent != 1 {
+	if sent := ProcessResetRecords(context.Background(), st, next, false, sender, time.UTC, "", resetNow); sent != 1 {
 		t.Fatalf("only the new record is sent, got %d: %+v", sent, sender.sent)
 	}
-	if sender.sent[0].Title != "✅ Codex 全局重置已完成" {
+	if sender.sent[0].Title != "✅ Codex global reset done" {
 		t.Fatalf("title %q", sender.sent[0].Title)
 	}
 }
@@ -359,8 +359,8 @@ func TestResetFeedSendsLatestPostPerSchedule(t *testing.T) {
 	sender := &fakeSender{}
 	st := store.NewState()
 	now := time.Date(2026, 10, 7, 19, 20, 0, 0, time.UTC)
-	ProcessResetRecords(context.Background(), st, nil, false, sender, time.UTC, LangZH, now)
-	shanghai := time.FixedZone("CST", 8*3600)
+	ProcessResetRecords(context.Background(), st, nil, false, sender, time.UTC, "", now)
+	east8 := time.FixedZone("UTC+8", 8*3600)
 	next := []ResetRecord{
 		bankedSchedule("post", "pending", "2026-10-07T19:19:17Z", start, end, 0.93),
 		bankedSchedule("reply", "pending", "2026-10-07T19:19:33Z", start, end, 0.82),
@@ -368,17 +368,17 @@ func TestResetFeedSendsLatestPostPerSchedule(t *testing.T) {
 		bankedSchedule("fulfilled", "fulfilled", "2026-10-03T04:01:28Z", "2026-10-02T07:00:00Z", "2026-10-03T07:00:00Z", 0.9),
 		{"id": "old", "kind": "reset_completed", "resetType": "global", "announcedAt": "2026-10-03T04:26:28Z"},
 	}
-	if sent := ProcessResetRecords(context.Background(), st, next, false, sender, shanghai, LangZH, now); sent != 1 {
+	if sent := ProcessResetRecords(context.Background(), st, next, false, sender, east8, "", now); sent != 1 {
 		t.Fatalf("only the latest post is sent, got %d: %+v", sent, sender.sent)
 	}
-	if want := "预计：10/07 周三 15:00～10/08 周四 15:00\n置信度：82%"; !strings.HasPrefix(sender.sent[0].Body, want) {
+	if want := "Expected: 10/07 Wed 15:00–10/08 Thu 15:00\nConfidence: 82%"; !strings.HasPrefix(sender.sent[0].Body, want) {
 		t.Fatalf("body %q, want prefix %q", sender.sent[0].Body, want)
 	}
 	late := bankedSchedule("late", "pending", "2026-10-07T19:00:00Z", start, end, 0.9)
 	update := bankedSchedule("update", "pending", "2026-10-07T20:00:00Z", start, end, 0.95)
 	again := append([]ResetRecord{late, update}, next...)
-	if sent := ProcessResetRecords(context.Background(), st, again, false, sender, shanghai, LangZH, now.Add(time.Hour)); sent != 1 ||
-		sender.sent[1].Title != "📅 Codex 重置卡排期更新" || !strings.Contains(sender.sent[1].Body, "95%") {
+	if sent := ProcessResetRecords(context.Background(), st, again, false, sender, east8, "", now.Add(time.Hour)); sent != 1 ||
+		sender.sent[1].Title != "📅 Codex reset card schedule updated" || !strings.Contains(sender.sent[1].Body, "95%") {
 		t.Fatalf("a later post is sent as an update and an earlier one is not, got %+v", sender.sent)
 	}
 }
@@ -390,16 +390,16 @@ func TestResetFeedReplyInLaterPoll(t *testing.T) {
 	sender := &fakeSender{}
 	st := store.NewState()
 	now := time.Date(2026, 10, 7, 19, 20, 0, 0, time.UTC)
-	ProcessResetRecords(context.Background(), st, nil, false, sender, time.UTC, LangZH, now)
+	ProcessResetRecords(context.Background(), st, nil, false, sender, time.UTC, "", now)
 	post := bankedSchedule("post", "pending", "2026-10-07T19:19:17Z", start, end, 0.93)
 	repeat := bankedSchedule("repeat", "pending", "2026-10-07T19:19:33Z", start, end, 0.93)
 	reply := bankedSchedule("reply", "pending", "2026-10-07T19:19:50Z", start, end, 0.82)
-	ProcessResetRecords(context.Background(), st, []ResetRecord{post}, false, sender, time.UTC, LangZH, now)
-	ProcessResetRecords(context.Background(), st, []ResetRecord{repeat, post}, false, sender, time.UTC, LangZH, now.Add(10*time.Minute))
+	ProcessResetRecords(context.Background(), st, []ResetRecord{post}, false, sender, time.UTC, "", now)
+	ProcessResetRecords(context.Background(), st, []ResetRecord{repeat, post}, false, sender, time.UTC, "", now.Add(10*time.Minute))
 	if len(sender.sent) != 1 {
 		t.Fatalf("a reply with the same content must not be sent, got %+v", sender.sent)
 	}
-	ProcessResetRecords(context.Background(), st, []ResetRecord{reply, repeat, post}, false, sender, time.UTC, LangZH, now.Add(20*time.Minute))
+	ProcessResetRecords(context.Background(), st, []ResetRecord{reply, repeat, post}, false, sender, time.UTC, "", now.Add(20*time.Minute))
 	if len(sender.sent) != 2 || !strings.Contains(sender.sent[1].Body, "82%") {
 		t.Fatalf("a reply with a new confidence is sent as an update, got %+v", sender.sent)
 	}
@@ -411,8 +411,8 @@ func TestResetFeedSupersedeRules(t *testing.T) {
 	run := func(records ...ResetRecord) []Message {
 		sender := &fakeSender{}
 		st := store.NewState()
-		ProcessResetRecords(context.Background(), st, nil, false, sender, time.UTC, LangZH, now)
-		ProcessResetRecords(context.Background(), st, records, false, sender, time.UTC, LangZH, now)
+		ProcessResetRecords(context.Background(), st, nil, false, sender, time.UTC, "", now)
+		ProcessResetRecords(context.Background(), st, records, false, sender, time.UTC, "", now)
 		return sender.sent
 	}
 	pending := bankedSchedule("a", "pending", "2026-10-07T19:00:00Z", start, end, 0.9)
@@ -436,7 +436,7 @@ func TestResetFeedFirstRunIgnoresKindCase(t *testing.T) {
 	r["kind"] = "RESET_SCHEDULED"
 	sender := &fakeSender{}
 	now := time.Date(2026, 10, 7, 19, 20, 0, 0, time.UTC)
-	if sent := ProcessResetRecords(context.Background(), store.NewState(), []ResetRecord{r}, true, sender, time.UTC, LangZH, now); sent != 1 {
+	if sent := ProcessResetRecords(context.Background(), store.NewState(), []ResetRecord{r}, true, sender, time.UTC, "", now); sent != 1 {
 		t.Fatalf("got %d", sent)
 	}
 }
@@ -450,11 +450,11 @@ func TestScheduleText(t *testing.T) {
 		r          ResetRecord
 		lang, want string
 	}{
-		{exact, LangZH, "10/09 周五 07:00"},
-		{deadline, LangZH, "10/08 周四 07:00 前"},
+		{exact, "", "10/09 Fri 07:00"},
+		{deadline, "", "by 10/08 Thu 07:00"},
 		{deadline, LangEN, "by 10/08 Thu 07:00"},
 		{bankedSchedule("c", "pending", "", "2026-10-07T07:00:00Z", "2026-10-08T07:00:00Z", 0.9), LangEN, "10/07 Wed 07:00–10/08 Thu 07:00"},
-		{noWindow, LangZH, "10/09 周五 07:00"},
+		{noWindow, "", "10/09 Fri 07:00"},
 	} {
 		format := func(t time.Time) string { return FormatTime(t, time.UTC, c.lang) }
 		if got := scheduleText(c.r, format, c.lang); got != c.want {
@@ -465,22 +465,22 @@ func TestScheduleText(t *testing.T) {
 
 func TestFormatTime(t *testing.T) {
 	at := time.Date(2026, 11, 22, 19, 0, 0, 0, time.UTC)
-	shanghai := time.FixedZone("CST", 8*3600)
+	east8 := time.FixedZone("UTC+8", 8*3600)
 	for _, c := range []struct {
 		loc        *time.Location
 		lang, want string
 	}{
-		{shanghai, LangZH, "11/23 周一 03:00"},
-		{shanghai, LangEN, "11/23 Mon 03:00"},
+		{east8, "", "11/23 Mon 03:00"},
+		{east8, LangEN, "11/23 Mon 03:00"},
 		{time.UTC, LangEN, "11/22 Sun 19:00"},
-		{time.UTC, "fr", "11/22 周日 19:00"},
+		{time.UTC, "fr", "11/22 Sun 19:00"},
 	} {
 		if got := FormatTime(at, c.loc, c.lang); got != c.want {
 			t.Fatalf("FormatTime(%v, %s) = %q, want %q", c.loc, c.lang, got, c.want)
 		}
 	}
 	end := time.Date(2026, 10, 8, 7, 0, 0, 0, time.UTC)
-	if got := CircuitMessage(LangZH, "Claude", end, "boom", shanghai).Body; !strings.Contains(got, "10/08 周四 15:00") {
+	if got := CircuitMessage("", "Claude", end, "boom", east8).Body; !strings.Contains(got, "10/08 Thu 15:00") {
 		t.Fatalf("circuit body %q", got)
 	}
 	if got := CooldownMessage(LangEN, "Claude", end, time.UTC).Body; !strings.Contains(got, "10/08 Thu 07:00") {
@@ -511,9 +511,19 @@ func TestEventContentHasNoWeekday(t *testing.T) {
 }
 
 func TestEnglishNotifications(t *testing.T) {
-	for in, want := range map[string]string{"": LangZH, "zh-CN": LangZH, "zh-TW": LangZH, "en": LangEN, "ru": LangEN} {
+	for in, want := range map[string]string{"": LangEN, "en": LangEN, " EN ": LangEN, "en-US": LangEN, "fr": LangEN, "ru": LangEN, "unsupported": LangEN} {
 		if got := NormalizeLang(in); got != want {
 			t.Fatalf("NormalizeLang(%q) = %q, want %q", in, got, want)
+		}
+		if got := T(in, "test_title"); got != "🕯️ cpa-pulse test notification" {
+			t.Errorf("test title for %q: %q", in, got)
+		}
+		if got := T(in, "window_line", "5h", "26%"); got != "5h: 26%" {
+			t.Errorf("window line for %q: %q", in, got)
+		}
+		msg := ResetMessage(records()[0], time.UTC, in)
+		if msg.Title != "📅 Codex global reset scheduled" || msg.JumpURL != "https://didcodexreset.com/history/1791028800000.html" {
+			t.Errorf("reset message for %q: %+v", in, msg)
 		}
 	}
 	sender := &fakeSender{}
@@ -521,7 +531,7 @@ func TestEnglishNotifications(t *testing.T) {
 	now := time.Date(2026, 10, 4, 1, 0, 0, 0, time.UTC)
 	cfg := config.Default()
 	cfg.RecoveryNotify.FiveHour = config.RecoveryAll
-	a := &Alerts{Cfg: cfg, Sender: sender, Lang: LangEN}
+	a := &Alerts{Cfg: cfg, Sender: sender, Lang: "fr"}
 	a.ProcessGroup(context.Background(), st, group(80, 80, now), now)
 	a.ProcessGroup(context.Background(), st, group(26, 80, now), now)
 	later := now.Add(5 * time.Hour)
@@ -535,6 +545,23 @@ func TestEnglishNotifications(t *testing.T) {
 	msg := ResetMessage(records()[0], time.UTC, LangEN)
 	if msg.Title != "📅 Codex global reset scheduled" || msg.JumpURL != "https://didcodexreset.com/history/1791028800000.html" {
 		t.Fatalf("reset message %+v", msg)
+	}
+}
+
+func TestTruncateUsesRunes(t *testing.T) {
+	for _, c := range []struct {
+		text string
+		n    int
+		want string
+	}{
+		{"café", 4, "café"},
+		{"café naïve", 6, "café n"},
+		{"résumé", 5, "résum"},
+		{"🙂🙂🙂", 2, "🙂🙂"},
+	} {
+		if got := truncate(c.text, c.n); got != c.want {
+			t.Errorf("truncate(%q, %d) = %q, want %q", c.text, c.n, got, c.want)
+		}
 	}
 }
 
@@ -606,7 +633,7 @@ func TestRecoveryAllNotifiesEveryResetWithPreviousCycle(t *testing.T) {
 		t.Fatalf("want one recovery, got %+v", sender.sent)
 	}
 	msg := sender.sent[0]
-	if msg.Title != "✅ Claude · 5h 已恢复" || !strings.HasPrefix(msg.Body, "上周期剩余：5h 63%\n5h：100%") {
+	if msg.Title != "✅ Claude · 5h recovered" || !strings.HasPrefix(msg.Body, "Left last cycle: 5h 63%\n5h: 100%") {
 		t.Fatalf("recovery %+v", msg)
 	}
 }
@@ -622,7 +649,7 @@ func TestRecoveryOmitsStalePreviousCycle(t *testing.T) {
 	a.ProcessGroup(context.Background(), st, fiveHour(63, reset), start)
 	after := reset.Add(time.Minute)
 	a.ProcessGroup(context.Background(), st, fiveHour(100, after.Add(5*time.Hour)), after)
-	if len(sender.sent) != 1 || strings.Contains(sender.sent[0].Body, "上周期") {
+	if len(sender.sent) != 1 || strings.Contains(sender.sent[0].Body, "Left last cycle") {
 		t.Fatalf("a reading an hour before the reset is not the cycle's end: %+v", sender.sent)
 	}
 }
@@ -666,7 +693,7 @@ func TestRecoveryAfterExhaustedNotifiesOnlyAfterUsedUpCycle(t *testing.T) {
 	at = reset.Add(time.Minute)
 	reset = at.Add(5 * time.Hour)
 	a.ProcessGroup(context.Background(), st, fiveHour(100, reset), at)
-	if len(sender.sent) != sent+1 || !strings.HasPrefix(sender.sent[sent].Body, "上周期剩余：5h 0%") {
+	if len(sender.sent) != sent+1 || !strings.HasPrefix(sender.sent[sent].Body, "Left last cycle: 5h 0%") {
 		t.Fatalf("want a recovery after the used-up cycle, got %+v", sender.sent)
 	}
 	// The next cycle is not used up, so its reset is not notified.
@@ -693,7 +720,7 @@ func TestRecoveryModesArePerWindow(t *testing.T) {
 	g.Windows[0].Remaining, g.Windows[0].Reset = 100, after.Add(5*time.Hour)
 	g.Windows[1].Remaining, g.Windows[1].Reset = 100, after.Add(7*24*time.Hour)
 	a.ProcessGroup(context.Background(), st, g, after)
-	if len(sender.sent) != 1 || sender.sent[0].Title != "✅ Claude · 7d 已恢复" {
+	if len(sender.sent) != 1 || sender.sent[0].Title != "✅ Claude · 7d recovered" {
 		t.Fatalf("only the 7-day window is notified: %+v", sender.sent)
 	}
 }
@@ -717,7 +744,7 @@ func TestRecoveryIsSentApartFromAlertAndRetried(t *testing.T) {
 	a.ProcessGroup(context.Background(), st, g, after)
 	sender.fail = false
 	a.ProcessGroup(context.Background(), st, g, after.Add(5*time.Minute))
-	if len(sender.sent) != 2 || !strings.HasPrefix(sender.sent[0].Title, "🟡") || sender.sent[1].Title != "✅ Claude · 5h 已恢复" {
+	if len(sender.sent) != 2 || !strings.HasPrefix(sender.sent[0].Title, "🟡") || sender.sent[1].Title != "✅ Claude · 5h recovered" {
 		t.Fatalf("want the alert and the retried recovery, got %+v", sender.sent)
 	}
 	a.ProcessGroup(context.Background(), st, g, after.Add(10*time.Minute))
@@ -770,7 +797,7 @@ func TestPreviousCycleIgnoresReadingsAfterTheReset(t *testing.T) {
 	// The provider still reports the passed reset time with the new value.
 	a.ProcessGroup(context.Background(), st, fiveHour(100, r1), r1.Add(time.Minute))
 	a.ProcessGroup(context.Background(), st, fiveHour(100, r1.Add(5*time.Hour)), r1.Add(2*time.Minute))
-	if len(sender.sent) != 1 || !strings.HasPrefix(sender.sent[0].Body, "上周期剩余：5h 63%") {
+	if len(sender.sent) != 1 || !strings.HasPrefix(sender.sent[0].Body, "Left last cycle: 5h 63%") {
 		t.Fatalf("want 63%% from before the reset, got %+v", sender.sent)
 	}
 }

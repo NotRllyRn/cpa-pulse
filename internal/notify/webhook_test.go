@@ -49,7 +49,7 @@ func captureServer(t *testing.T, status int, response string) (*httptest.Server,
 var testMessage = Message{
 	Kind:    KindQuota,
 	Title:   `🔴 GPT#eg · 5h 8% "low"`,
-	Body:    "5h：8% | 03h\n7d：60%",
+	Body:    "5h: 8% | 03h\n7d: 60%",
 	Level:   LevelTimeSensitive,
 	JumpURL: "https://example.com/a?b=c",
 	Label:   "GPT#eg",
@@ -76,7 +76,7 @@ func TestWebhookEscapesPlaceholdersWhereTheyAppear(t *testing.T) {
 	if ct := got.header.Get("Content-Type"); !strings.HasPrefix(ct, "application/json") {
 		t.Fatalf("content type %q", ct)
 	}
-	if h := got.header.Get("X-Title"); strings.ContainsAny(h, "\r\n") || !strings.Contains(h, "7d：60%") {
+	if h := got.header.Get("X-Title"); strings.ContainsAny(h, "\r\n") || !strings.Contains(h, "7d: 60%") {
 		t.Fatalf("header %q", h)
 	}
 	var body map[string]string
@@ -247,14 +247,14 @@ func TestFanoutDeliversWhenOneChannelWorks(t *testing.T) {
 
 func TestWebhookContentTypeDetection(t *testing.T) {
 	server, got := captureServer(t, 200, "")
-	w, err := webhookFromYAML(t, "webhook:\n  url: "+server.URL+"\n  body: '[Lamplighter] {{text}}'\n")
+	w, err := webhookFromYAML(t, "webhook:\n  url: "+server.URL+"\n  body: '[cpa-pulse] {{text}}'\n")
 	if err != nil {
 		t.Fatal(err)
 	}
 	if err := w.Send(context.Background(), testMessage); err != nil {
 		t.Fatal(err)
 	}
-	if !strings.HasPrefix(got.header.Get("Content-Type"), "text/plain") || got.body != "[Lamplighter] "+testMessage.Title+"\n"+testMessage.Body {
+	if !strings.HasPrefix(got.header.Get("Content-Type"), "text/plain") || got.body != "[cpa-pulse] "+testMessage.Title+"\n"+testMessage.Body {
 		t.Fatalf("plain text with a bracket: %q %q", got.header.Get("Content-Type"), got.body)
 	}
 
@@ -376,7 +376,7 @@ func TestNoChannelTurnsNotificationsOff(t *testing.T) {
 
 func TestInvalidWebhookAloneFailsAndRetries(t *testing.T) {
 	failures := 0
-	f := &Fanout{Invalid: errors.New("Webhook 设置无效")}
+	f := &Fanout{Invalid: errors.New("invalid Webhook settings")}
 	a := &Alerts{Cfg: config.Default(), Sender: f, OnError: func(Message, error) { failures++ }}
 	st := store.NewState()
 	now := time.Date(2026, 10, 4, 1, 0, 0, 0, time.UTC)
@@ -428,11 +428,11 @@ func TestNotificationsOffClearRecoveriesAndReminders(t *testing.T) {
 
 func TestResetFeedKeepsRecordsWhileNotificationsAreOff(t *testing.T) {
 	st := store.NewState()
-	if sent := ProcessResetRecords(context.Background(), st, records(), true, &Fanout{}, time.UTC, LangZH, resetNow); sent != 0 {
+	if sent := ProcessResetRecords(context.Background(), st, records(), true, &Fanout{}, time.UTC, "", resetNow); sent != 0 {
 		t.Fatalf("sent %d with notifications off", sent)
 	}
 	sender := &fakeSender{}
-	if sent := ProcessResetRecords(context.Background(), st, records(), true, sender, time.UTC, LangZH, resetNow); sent != 1 {
+	if sent := ProcessResetRecords(context.Background(), st, records(), true, sender, time.UTC, "", resetNow); sent != 1 {
 		t.Fatalf("the pending schedule must go out once a channel is set up, sent %d", sent)
 	}
 }

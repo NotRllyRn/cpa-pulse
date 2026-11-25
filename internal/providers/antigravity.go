@@ -81,7 +81,7 @@ func fetchHubVersion(ctx context.Context, doer quota.Doer) (string, error) {
 		return "", err
 	}
 	if resp.Status != http.StatusOK {
-		return "", fmt.Errorf("Antigravity Hub 更新清单返回 HTTP %d", resp.Status)
+		return "", fmt.Errorf("Antigravity Hub update manifest returned HTTP %d", resp.Status)
 	}
 	var manifest struct {
 		Version string `yaml:"version"`
@@ -91,7 +91,7 @@ func fetchHubVersion(ctx context.Context, doer quota.Doer) (string, error) {
 	}
 	version := strings.TrimSpace(manifest.Version)
 	if !hubSemver.MatchString(version) {
-		return "", fmt.Errorf("Antigravity Hub 更新清单的版本无效: %q", version)
+		return "", fmt.Errorf("invalid version in Antigravity Hub update manifest: %q", version)
 	}
 	return version, nil
 }
@@ -140,12 +140,11 @@ var antigravity = &Provider{
 			return chatBody(model, map[string]any{"temperature": 0, "reasoning_effort": "none"})
 		},
 		Candidates: antigravityCandidates,
-		Hint:       Text{Zh: "最新的 Flash", En: "latest Flash"},
+		Hint:       Text{En: "latest Flash"},
 		// The settings show the Gemini model, which matches "latest Flash".
 		HintGroup: "Gemini",
 		Groups:    []string{"Gemini", "Claude / GPT"},
 		GroupsHint: Text{
-			Zh: "Antigravity 按模型分成多个独立的 5 小时额度组。只有勾选的额度组会自动点火；Claude / GPT 额度组较小，默认不点。",
 			En: "Antigravity splits quota into separate 5-hour groups by model. Only checked groups are ignited; the Claude / GPT group is small and off by default.",
 		},
 		// The Claude / GPT group is much smaller than the Gemini one, so only
@@ -189,7 +188,7 @@ func antigravityCandidates(groupLabel string, available []string) []string {
 
 func fetchAntigravity(ctx context.Context, doer quota.Doer, cred Credential, now time.Time) ([]quota.RawGroup, error) {
 	if cred.ProjectID == "" {
-		return nil, errors.New("Antigravity 凭证缺少 project_id")
+		return nil, errors.New("Antigravity credential is missing project_id")
 	}
 	body, _ := json.Marshal(map[string]string{"project": cred.ProjectID})
 	agent := antigravityUserAgent(ctx, doer, cred, now)
@@ -213,7 +212,7 @@ func fetchAntigravity(ctx context.Context, doer quota.Doer, cred Credential, now
 		return groups, nil
 	}
 	if lastErr == nil {
-		lastErr = errors.New("Antigravity 未返回额度组")
+		lastErr = errors.New("Antigravity returned no quota groups")
 	}
 	return nil, lastErr
 }
@@ -242,7 +241,7 @@ func ParseAntigravityProfile(payload map[string]any) (string, error) {
 			return id, nil
 		}
 	}
-	return "", errors.New("Antigravity 账号资料中没有套餐")
+	return "", errors.New("Antigravity account profile contains no plan")
 }
 
 var nonAlnum = regexp.MustCompile(`[^a-z0-9]+`)
@@ -277,7 +276,7 @@ func antigravityBucketLabel(bucket map[string]any) string {
 	case window != "":
 		return window
 	}
-	return "额度"
+	return "Quota"
 }
 
 func parseFraction(value any) (float64, bool) {
@@ -317,7 +316,7 @@ func ParseAntigravityQuota(payload map[string]any) ([]quota.RawGroup, error) {
 	}
 	rawGroups, ok := payload["groups"].([]any)
 	if !ok {
-		return nil, errors.New("Antigravity 返回中没有 groups")
+		return nil, errors.New("Antigravity response contains no groups")
 	}
 	var groups []quota.RawGroup
 	for gi, raw := range rawGroups {
@@ -390,7 +389,7 @@ func ParseAntigravityQuota(payload map[string]any) ([]quota.RawGroup, error) {
 		groups = append(groups, out)
 	}
 	if len(groups) == 0 {
-		return nil, errors.New("Antigravity 未返回可识别的额度窗口")
+		return nil, errors.New("Antigravity returned no recognized quota windows")
 	}
 	return groups, nil
 }

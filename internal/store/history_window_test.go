@@ -14,7 +14,8 @@ func TestHistoryWindowBoundsOutsideRangeMemory(t *testing.T) {
 		now := time.Date(2026, 11, 8, 12, 0, 0, 0, time.UTC)
 		from := now.Add(-time.Hour)
 		h := &History{Dir: t.TempDir()}
-		// 最新前驱先写入，后续的旧补写不得覆盖它；未知重置时间也需要保留。
+		// Write the latest preceding sample first; older backfills must not replace it.
+		// Preserve samples with unknown reset times too.
 		if err := h.Append(Record{Kind: "s", Time: from.Unix() - 1, Group: "g", Window: "w", Remaining: 123}); err != nil {
 			t.Fatal(err)
 		}
@@ -60,7 +61,7 @@ func TestHistoryWindowDoesNotNeedTemporaryDirectory(t *testing.T) {
 	for i := range records {
 		records[i] = Record{Kind: "s", Time: now.Add(-2*time.Hour).Unix() + int64(i), Group: "g", Window: "w", Reset: now.Unix()}
 	}
-	// 同时间的前驱也按最后补写的记录取值。
+	// The last appended preceding sample wins when timestamps match.
 	records = append(records, Record{Kind: "s", Time: now.Add(-2*time.Hour).Unix() + 2047, Group: "g", Window: "w", Remaining: 88})
 	if err := h.Append(records...); err != nil {
 		t.Fatal(err)

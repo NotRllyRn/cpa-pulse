@@ -142,7 +142,7 @@ func ParseKimiUsage(payload map[string]any, now time.Time) ([]quota.RawGroup, er
 		}
 	}
 	if len(group.Windows) == 0 {
-		return nil, errors.New("Kimi 未返回可识别的额度窗口")
+		return nil, errors.New("Kimi returned no recognized quota windows")
 	}
 	return []quota.RawGroup{group}, nil
 }

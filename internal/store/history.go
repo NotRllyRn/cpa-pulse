@@ -13,7 +13,7 @@ import (
 	"time"
 )
 
-// ErrHistoryLimit 表示查询超过历史扫描的内存预算。
+// ErrHistoryLimit means a query exceeds the history scan memory budget.
 var ErrHistoryLimit = errors.New("History query exceeds the 20000-bucket memory limit")
 
 // Record is one line of a history file: a quota sample or an event.
@@ -108,8 +108,9 @@ func (h *History) QueryContext(ctx context.Context, from, to time.Time) ([]Recor
 	return out, ctx.Err()
 }
 
-// Scan 逐行读取历史；零值 from 表示读取所有保留文件。回调顺序为文件顺序，
-// 同一文件中的补写记录可以乱序。扫描不持有写锁，取消无需等待写入结束。
+// Scan reads history line by line; a zero from reads all retained files.
+// Callbacks follow file order; backfilled records within a file may be out of
+// order. Scanning holds no write lock, so cancellation does not wait for writes.
 func (h *History) Scan(ctx context.Context, from, to time.Time, visit func(Record) error) error {
 	if err := ctx.Err(); err != nil {
 		return err
@@ -161,8 +162,9 @@ func (h *History) Scan(ctx context.Context, from, to time.Time, visit func(Recor
 	return ctx.Err()
 }
 
-// QuerySampled 在扫描时仅保留每桶的最后一个样本，内存最多容纳 20000 个桶。
-// 文件大小和记录数量不影响此上限；超过上限时返回工具错误。
+// QuerySampled keeps the last sample in each bucket while scanning, with at
+// most 20000 buckets in memory regardless of file size or record count.
+// Exceeding this limit returns ErrHistoryLimit.
 func (h *History) QuerySampled(ctx context.Context, from, to time.Time, bucket int64, accept func(Record) bool) ([]Record, error) {
 	type key struct {
 		group, window string

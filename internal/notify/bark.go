@@ -60,7 +60,7 @@ type Sender interface {
 
 // ErrNotConfigured means neither bark_url nor webhook.url is set, which turns
 // notifications off: callers drop the message without logging a failure.
-var ErrNotConfigured = errors.New("未配置推送渠道（bark_url 或 webhook.url）")
+var ErrNotConfigured = errors.New("no notification channel configured (bark_url or webhook.url)")
 
 // Bark sends messages to a Bark server.
 type Bark struct {
@@ -81,7 +81,7 @@ func escape(value string) string {
 func (b *Bark) Send(ctx context.Context, msg Message) error {
 	base := strings.TrimRight(strings.TrimSpace(b.URL), "/")
 	if base == "" {
-		return errors.New("未配置 bark_url")
+		return errors.New("bark_url is not configured")
 	}
 	params := url.Values{}
 	if b.Group != "" {
@@ -101,7 +101,7 @@ func (b *Bark) Send(ctx context.Context, msg Message) error {
 	target := fmt.Sprintf("%s/%s/%s?%s", base, escape(msg.Title), escape(msg.Body), params.Encode())
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, target, nil)
 	if err != nil {
-		return fmt.Errorf("Bark 请求无法创建: %w", unwrapURLError(err))
+		return fmt.Errorf("cannot create Bark request: %w", unwrapURLError(err))
 	}
 	if b.UserAgent != "" {
 		req.Header.Set("User-Agent", b.UserAgent)
@@ -113,7 +113,7 @@ func (b *Bark) Send(ctx context.Context, msg Message) error {
 	resp, err := client.Do(req)
 	if err != nil {
 		// The *url.Error text holds the request URL with the device key.
-		return fmt.Errorf("Bark 推送失败: %w", unwrapURLError(err))
+		return fmt.Errorf("Bark delivery failed: %w", unwrapURLError(err))
 	}
 	defer resp.Body.Close()
 	raw, _ := io.ReadAll(io.LimitReader(resp.Body, 64*1024))
@@ -124,7 +124,7 @@ func (b *Bark) Send(ctx context.Context, msg Message) error {
 		Code *int `json:"code"`
 	}
 	if json.Unmarshal(raw, &payload) == nil && payload.Code != nil && *payload.Code != 200 {
-		return fmt.Errorf("Bark 返回 code=%d: %s", *payload.Code, truncate(string(raw), 200))
+		return fmt.Errorf("Bark returned code=%d: %s", *payload.Code, truncate(string(raw), 200))
 	}
 	return nil
 }

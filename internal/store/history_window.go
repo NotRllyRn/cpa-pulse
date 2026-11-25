@@ -6,16 +6,17 @@ import (
 	"time"
 )
 
-// HistoryWindow 只保留范围内记录，以及每个系列在范围前的最后一个样本。
-// KnownReset 标记系列在保留历史中是否出现过非零重置时间。
+// HistoryWindow holds records within the range and the last preceding sample
+// of each series. KnownReset marks series with a nonzero reset in retained history.
 type HistoryWindow struct {
 	Records    []Record
 	Before     map[string]Record
 	KnownReset map[string]bool
 }
 
-// QueryWindow 单遍扫描保留历史，内存为 O(系列数 + 范围内记录数)。
-// 前驱按时间取最大值，同时间取最后补写的记录；仅对范围内记录稳定排序。
+// QueryWindow scans retained history once, using O(series + records in range)
+// memory. The latest preceding sample wins, with the last appended record
+// breaking ties. Only records within the range are stably sorted.
 func (h *History) QueryWindow(ctx context.Context, from, to time.Time) (HistoryWindow, error) {
 	out := HistoryWindow{Before: map[string]Record{}, KnownReset: map[string]bool{}}
 	err := h.Scan(ctx, time.Time{}, to, func(record Record) error {

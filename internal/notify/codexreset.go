@@ -63,7 +63,7 @@ func FetchResetRecords(ctx context.Context, client *http.Client, userAgent strin
 		} `json:"data"`
 	}
 	if err := json.Unmarshal(raw, &payload); err != nil || !payload.OK {
-		return nil, errors.New("Did Codex Reset API 返回异常")
+		return nil, errors.New("Did Codex Reset API returned an invalid response")
 	}
 	var out []ResetRecord
 	for _, item := range payload.Data.Items {

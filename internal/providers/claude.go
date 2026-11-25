@@ -43,7 +43,7 @@ var claude = &Provider{
 			}
 		},
 		Candidates: claudeCandidates,
-		Hint:       Text{Zh: "最新的 Haiku", En: "latest Haiku"},
+		Hint:       Text{En: "latest Haiku"},
 	},
 }
 
@@ -112,7 +112,7 @@ func ParseClaudeProfile(payload map[string]any) (string, error) {
 		case account["has_claude_pro"] == true:
 			kind = "claude_pro"
 		default:
-			return "", errors.New("Claude 账号资料中没有套餐")
+			return "", errors.New("Claude account profile contains no plan")
 		}
 	}
 	return strings.TrimSpace(kind + " " + scalarString(field(org, "rate_limit_tier"))), nil
@@ -156,7 +156,7 @@ func ParseClaudeUsage(payload map[string]any) ([]quota.RawGroup, error) {
 		}
 	}
 	if len(windows) == 0 {
-		return nil, errors.New("Claude 未返回可识别的额度窗口")
+		return nil, errors.New("Claude returned no recognized quota windows")
 	}
 
 	var groups []quota.RawGroup

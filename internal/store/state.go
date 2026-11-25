@@ -1,4 +1,4 @@
-// Package store persists Lamplighter state and quota history in the plugin
+// Package store persists cpa-pulse state and quota history in the plugin
 // data directory.
 package store
 
@@ -44,8 +44,9 @@ type WindowState struct {
 	BounceReadings int   `json:"bounce_readings,omitempty"`
 	// PendingRecovery is a recovery notification not delivered yet.
 	PendingRecovery *PendingRecovery `json:"pending_recovery,omitempty"`
-	// Rebase 表示套餐变化或主动查询确认窗口缺席；窗口返回后的首次读数
-	// 只记录新基线。窗口是否允许被动更新由 GroupState.ActiveWindows 决定。
+	// Rebase marks a plan change or a window absent from an active query.
+	// Its first returning reading only records a baseline.
+	// GroupState.ActiveWindows controls whether passive updates are allowed.
 	Rebase bool `json:"rebase,omitempty"`
 }
 
@@ -63,9 +64,9 @@ type PendingRecovery struct {
 
 // GroupState holds the notification baselines of one quota group.
 type GroupState struct {
-	// ActiveWindows 保存最近一次成功主动查询确认的窗口；nil 表示尚未确认。
+	// ActiveWindows lists windows confirmed by the last successful active query; nil means unconfirmed.
 	ActiveWindows []string `json:"active_windows"`
-	// LegacyUnconfirmed 限制磁盘中已有但缺少可靠主动确认信息的组；不持久化。
+	// LegacyUnconfirmed restricts loaded groups without reliable active confirmation; it is not persisted.
 	LegacyUnconfirmed bool                    `json:"-"`
 	Label             string                  `json:"label,omitempty"`
 	LastSeen          int64                   `json:"last_seen,omitempty"`
@@ -123,8 +124,8 @@ type State struct {
 	// CooldownNotices maps an auth index to the end of the stale CPA
 	// cooldown that was already notified, in Unix seconds.
 	CooldownNotices map[string]int64 `json:"cooldown_notices,omitempty"`
-	// Language is the notification language, the Management Center language
-	// last reported by the management page.
+	// Language retains the reported notification language for compatibility.
+	// Notifications always use English.
 	Language string `json:"language,omitempty"`
 	// Plans maps an auth index to the plan last read for the account.
 	Plans map[string]*PlanState `json:"plans,omitempty"`
@@ -306,15 +307,16 @@ func (f *StateFile) Load() (state *State, fresh bool, err error) {
 	}
 	state = NewState()
 	if err := json.Unmarshal(raw, state); err != nil {
-		return NewState(), true, fmt.Errorf("状态文件损坏，已重建: %w", err)
+		return NewState(), true, fmt.Errorf("state file is corrupt; rebuilt empty state: %w", err)
 	}
 	state.ensure()
 	state.restoreActiveWindows()
 	return state, false, nil
 }
 
-// restoreActiveWindows 只信任成功主动查询写入的非空 plans.windows。
-// 通知基线、Rebase 和点火观测都不能证明当前窗口仍然存在。
+// restoreActiveWindows trusts only nonempty plans.windows from successful
+// active queries. Notification baselines, Rebase and ignition observations
+// cannot confirm that a window still exists.
 func (s *State) restoreActiveWindows() {
 	for key, group := range s.Groups {
 		if group.ActiveWindows != nil {

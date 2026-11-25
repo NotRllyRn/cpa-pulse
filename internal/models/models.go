@@ -39,7 +39,7 @@ type Lister struct {
 // List returns the model IDs exposed by CPA at baseURL.
 func (l *Lister) List(ctx context.Context, baseURL, apiKey string) ([]string, error) {
 	if strings.TrimSpace(apiKey) == "" {
-		return nil, errors.New("未配置 models_api_key，无法读取模型列表")
+		return nil, errors.New("models_api_key is not configured; cannot read the model list")
 	}
 	ttl := l.TTL
 	if ttl <= 0 {
@@ -67,12 +67,12 @@ func (l *Lister) List(ctx context.Context, baseURL, apiKey string) ([]string, er
 	req.Header.Set("Accept", "application/json")
 	resp, err := client.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("读取 CPA 模型列表失败: %w", err)
+		return nil, fmt.Errorf("cannot read CPA model list: %w", err)
 	}
 	defer resp.Body.Close()
 	body, _ := io.ReadAll(io.LimitReader(resp.Body, 4<<20))
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("读取 CPA 模型列表失败: HTTP %d", resp.StatusCode)
+		return nil, fmt.Errorf("cannot read CPA model list: HTTP %d", resp.StatusCode)
 	}
 	var payload struct {
 		Data []struct {
@@ -80,7 +80,7 @@ func (l *Lister) List(ctx context.Context, baseURL, apiKey string) ([]string, er
 		} `json:"data"`
 	}
 	if err := json.Unmarshal(body, &payload); err != nil {
-		return nil, fmt.Errorf("CPA 模型列表格式错误: %w", err)
+		return nil, fmt.Errorf("invalid CPA model list: %w", err)
 	}
 	ids := make([]string, 0, len(payload.Data))
 	for _, item := range payload.Data {

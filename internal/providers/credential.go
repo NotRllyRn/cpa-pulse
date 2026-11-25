@@ -35,7 +35,7 @@ func Fingerprint(raw json.RawMessage) string {
 	return ""
 }
 
-// Credential holds the fields Lamplighter reads from a credential file.
+// Credential holds the fields cpa-pulse reads from a credential file.
 type Credential struct {
 	// Provider is the provider name CPA reports for the credential, which
 	// can be an alias such as "kimi-ai". ID and Name are its runtime ID and

@@ -36,7 +36,7 @@ func send(ctx context.Context, doer quota.Doer, cred Credential, req quota.Reque
 	decoder.UseNumber()
 	var payload map[string]any
 	if err := decoder.Decode(&payload); err != nil {
-		return nil, fmt.Errorf("上游返回不是 JSON object: %w", err)
+		return nil, fmt.Errorf("upstream response is not a JSON object: %w", err)
 	}
 	return payload, nil
 }

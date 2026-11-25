@@ -50,7 +50,7 @@ var codex = &Provider{
 			}
 		},
 		Candidates: codexCandidates,
-		Hint:       Text{Zh: "最新的 Luna", En: "latest Luna"},
+		Hint:       Text{En: "latest Luna"},
 	},
 }
 
@@ -80,7 +80,7 @@ func fetchCodex(ctx context.Context, doer quota.Doer, cred Credential, now time.
 func ParseCodexUsage(payload map[string]any, now time.Time) ([]quota.RawGroup, error) {
 	rateLimit, _ := field(payload, "rate_limit", "rateLimit").(map[string]any)
 	if rateLimit == nil {
-		return nil, errors.New("Codex 未返回 rate_limit")
+		return nil, errors.New("Codex returned no rate_limit")
 	}
 	primary, _ := field(rateLimit, "primary_window", "primaryWindow").(map[string]any)
 	secondary, _ := field(rateLimit, "secondary_window", "secondaryWindow").(map[string]any)
@@ -132,7 +132,7 @@ func ParseCodexUsage(payload map[string]any, now time.Time) ([]quota.RawGroup, e
 		}
 	}
 	if len(windows) == 0 {
-		return nil, errors.New("Codex 未返回可识别的额度窗口")
+		return nil, errors.New("Codex returned no recognized quota windows")
 	}
 	plan := scalarString(field(payload, "plan_type", "planType"))
 	return []quota.RawGroup{{Key: "codex:main", SourceLabel: codexTitle, Windows: windows, Plan: plan}}, nil

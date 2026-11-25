@@ -55,14 +55,14 @@ func NewWebhook(cfg config.Webhook) (*Webhook, error) {
 	switch w.Method {
 	case http.MethodGet, http.MethodPost, http.MethodPut:
 	default:
-		return nil, fmt.Errorf("webhook.method 只能是 GET、POST 或 PUT，当前为 %s", w.Method)
+		return nil, fmt.Errorf("webhook.method must be GET, POST or PUT; got %s", w.Method)
 	}
 	if w.Method == http.MethodGet && strings.TrimSpace(w.Body) != "" {
-		return nil, errors.New("webhook.method 为 GET 时不能设置 body")
+		return nil, errors.New("webhook.body cannot be set when webhook.method is GET")
 	}
 	parsed, err := url.Parse(placeholderPattern.ReplaceAllString(w.URL, "x"))
 	if err != nil || (parsed.Scheme != "http" && parsed.Scheme != "https") || parsed.Host == "" {
-		return nil, errors.New("webhook.url 必须是 http:// 或 https:// 开头的地址")
+		return nil, errors.New("webhook.url must be an http:// or https:// URL")
 	}
 	texts := []string{w.URL, w.Body}
 	// Values are trimmed because a YAML block scalar ends with a line break,
@@ -71,15 +71,15 @@ func NewWebhook(cfg config.Webhook) (*Webhook, error) {
 	seen := map[string]bool{}
 	for name, value := range cfg.Headers {
 		if !headerNamePattern.MatchString(name) {
-			return nil, fmt.Errorf("webhook.headers 中的名称不合法：%q", name)
+			return nil, fmt.Errorf("invalid name in webhook.headers: %q", name)
 		}
 		if seen[strings.ToLower(name)] {
-			return nil, fmt.Errorf("webhook.headers 中的 %s 重复（名称不区分大小写）", name)
+			return nil, fmt.Errorf("duplicate name in webhook.headers (case-insensitive): %s", name)
 		}
 		seen[strings.ToLower(name)] = true
 		value = strings.TrimSpace(value)
 		if strings.ContainsFunc(value, func(r rune) bool { return (r < 0x20 && r != '\t') || r == 0x7f }) {
-			return nil, fmt.Errorf("webhook.headers 中 %s 的值含有换行或控制字符", name)
+			return nil, fmt.Errorf("webhook.headers value for %s contains a line break or control character", name)
 		}
 		w.Headers[name] = value
 		texts = append(texts, value)
@@ -87,7 +87,7 @@ func NewWebhook(cfg config.Webhook) (*Webhook, error) {
 	for _, text := range texts {
 		for _, match := range placeholderPattern.FindAllStringSubmatch(text, -1) {
 			if !isPlaceholder(match[1]) {
-				return nil, fmt.Errorf("webhook 占位符 %s 不存在，可用的有：%s", match[0], strings.Join(Placeholders, "、"))
+				return nil, fmt.Errorf("unknown webhook placeholder %s; available: %s", match[0], strings.Join(Placeholders, ", "))
 			}
 		}
 	}
@@ -96,11 +96,11 @@ func NewWebhook(cfg config.Webhook) (*Webhook, error) {
 		// YAML integers equal to JSON numbers.
 		raw, err := json.Marshal(w.SuccessJSON)
 		if err != nil {
-			return nil, fmt.Errorf("webhook.success_json 无法解析：%v", err)
+			return nil, fmt.Errorf("cannot parse webhook.success_json: %v", err)
 		}
 		var expected map[string]any
 		if err := json.Unmarshal(raw, &expected); err != nil {
-			return nil, fmt.Errorf("webhook.success_json 无法解析：%v", err)
+			return nil, fmt.Errorf("cannot parse webhook.success_json: %v", err)
 		}
 		w.SuccessJSON = expected
 	}
@@ -157,7 +157,7 @@ func (w *Webhook) Deliver(ctx context.Context, msg Message) (string, error) {
 	}
 	req, err := http.NewRequestWithContext(ctx, w.Method, fill(w.URL, values, escape), body)
 	if err != nil {
-		return "", w.redactErr(fmt.Errorf("Webhook 请求无法创建: %w", unwrapURLError(err)))
+		return "", w.redactErr(fmt.Errorf("cannot create Webhook request: %w", unwrapURLError(err)))
 	}
 	for name, value := range w.Headers {
 		req.Header.Set(name, fill(value, values, headerEscape))
@@ -174,7 +174,7 @@ func (w *Webhook) Deliver(ctx context.Context, msg Message) (string, error) {
 	}
 	resp, err := client.Do(req)
 	if err != nil {
-		return "", w.redactErr(fmt.Errorf("Webhook 推送失败: %w", unwrapURLError(err)))
+		return "", w.redactErr(fmt.Errorf("Webhook delivery failed: %w", unwrapURLError(err)))
 	}
 	defer resp.Body.Close()
 	raw, _ := io.ReadAll(io.LimitReader(resp.Body, 64*1024))
@@ -185,7 +185,7 @@ func (w *Webhook) Deliver(ctx context.Context, msg Message) (string, error) {
 	if w.Checked() {
 		var got map[string]any
 		if json.Unmarshal(raw, &got) != nil {
-			return snippet, fmt.Errorf("Webhook 响应不是 JSON 对象，无法检查 success_json: %s", snippet)
+			return snippet, fmt.Errorf("Webhook response is not a JSON object; cannot check success_json: %s", snippet)
 		}
 		keys := make([]string, 0, len(w.SuccessJSON))
 		for key := range w.SuccessJSON {
@@ -194,7 +194,7 @@ func (w *Webhook) Deliver(ctx context.Context, msg Message) (string, error) {
 		sort.Strings(keys)
 		for _, key := range keys {
 			if !reflect.DeepEqual(got[key], w.SuccessJSON[key]) {
-				return snippet, fmt.Errorf("Webhook 响应不符合 success_json（%s）: %s", key, snippet)
+				return snippet, fmt.Errorf("Webhook response does not match success_json (%s): %s", key, snippet)
 			}
 		}
 	}
@@ -241,7 +241,7 @@ func defaultBody(values map[string]string) string {
 
 // jsonTemplate reports whether body is JSON once every placeholder is
 // filled with a word. Placeholders in a JSON body sit inside quotes, so text
-// such as "[Lamplighter] {{text}}" stays plain text.
+// such as "[cpa-pulse] {{text}}" stays plain text.
 func jsonTemplate(body string) bool {
 	return json.Valid([]byte(placeholderPattern.ReplaceAllString(body, "x")))
 }

@@ -1,4 +1,4 @@
-// Package providers describes the services Lamplighter monitors. Each
+// Package providers describes the services cpa-pulse monitors. Each
 // service, in its own file, says how to read its quota, which response
 // headers carry quota, and how to ignite its 5-hour window.
 //
@@ -69,9 +69,8 @@ type Ignition struct {
 	DefaultGroups []string
 }
 
-// Text is a user-facing text in Chinese and English.
+// Text is user-facing English copy.
 type Text struct {
-	Zh string `json:"zh"`
 	En string `json:"en"`
 }
 
@@ -90,7 +89,7 @@ func IDs() []string {
 }
 
 // Lookup returns the provider for a provider name from CPA or the config,
-// or nil when Lamplighter does not support it.
+// or nil when cpa-pulse does not support it.
 func Lookup(name string) *Provider {
 	name = strings.ReplaceAll(strings.ToLower(strings.TrimSpace(name)), "_", "-")
 	for _, p := range registry {
@@ -148,7 +147,7 @@ func GroupRank(sourceLabel string) int {
 // Fetch reads the quota windows of one credential.
 func Fetch(ctx context.Context, p *Provider, doer quota.Doer, cred Credential, now time.Time) ([]quota.RawGroup, error) {
 	if cred.AccessToken == "" {
-		return nil, errors.New("凭证文件中没有 access_token")
+		return nil, errors.New("credential file contains no access_token")
 	}
 	return p.Fetch(ctx, doer, cred, now)
 }
@@ -159,7 +158,7 @@ const TriggerPrompt = "Reply with only OK. Do not think, do not use tools, do no
 // Request returns the entry protocol and body of the ignition request.
 func Request(p *Provider, model string) (string, []byte, error) {
 	if p.Ignition == nil {
-		return "", nil, errors.New("不支持点火的 provider: " + p.ID)
+		return "", nil, errors.New("provider does not support ignition: " + p.ID)
 	}
 	body, err := json.Marshal(p.Ignition.Body(model))
 	if err != nil {
@@ -179,14 +178,14 @@ func Candidates(p *Provider, group, override string, available []string) ([]stri
 				return []string{override}, nil
 			}
 		}
-		return nil, fmt.Errorf("指定点火模型 %s 不在 CPA 模型列表中", override)
+		return nil, fmt.Errorf("configured ignition model %s is missing from the CPA model list", override)
 	}
 	var out []string
 	if p.Ignition != nil {
 		out = models.Unique(p.Ignition.Candidates(group, available))
 	}
 	if len(out) == 0 {
-		return nil, errors.New("CPA 模型列表中没有适合该凭证的点火模型")
+		return nil, errors.New("CPA model list contains no ignition model suitable for this credential")
 	}
 	return out, nil
 }
