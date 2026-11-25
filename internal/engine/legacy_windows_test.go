@@ -28,9 +28,9 @@ func TestLegacyAbsentWindowMigrationSurvivesFailedActiveQuery(t *testing.T) {
 		{"unknown-without-old-rebase", "", false, false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			c := &clock{t: time.Date(2026, 11, 8, 12, 0, 0, 0, shanghai)}
+			c := &clock{t: time.Date(2026, 11, 8, 12, 0, 0, 0, testZone)}
 			dir := t.TempDir()
-			// 使用实际旧格式：只有通知基线和可选的主动窗口签名，没有 active_windows。
+			// Use the legacy format: notification baselines and an optional active window signature, without active_windows.
 			raw, err := json.Marshal(map[string]any{
 				"version": 1, "groups": map[string]any{"codex:1:codex:main": map[string]any{"windows": map[string]any{
 					"five-hour": map[string]any{"remaining": 0, "rebase": tc.rebase, "reset": c.t.Add(-time.Hour).Format(time.RFC3339)},
@@ -83,7 +83,7 @@ func TestLegacyAbsentWindowMigrationSurvivesFailedActiveQuery(t *testing.T) {
 					t.Fatal("a migrated present window must accept passive updates even with Rebase")
 				}
 			}
-			// 状态文件中没有的新组仍可以先接收被动读数。
+			// New groups absent from the state file may receive passive readings first.
 			five.Remaining = 80
 			apply("new-pool", []quota.Window{five})
 			if len(e.groups["codex:1:new-pool"].Windows) != 1 || len(sent.sent) != 0 {

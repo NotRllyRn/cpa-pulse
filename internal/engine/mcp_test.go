@@ -13,7 +13,7 @@ import (
 )
 
 func TestMCPDTOsAndTools(t *testing.T) {
-	c := &clock{t: time.Date(2026, 10, 4, 10, 0, 0, 0, shanghai)}
+	c := &clock{t: time.Date(2026, 10, 4, 10, 0, 0, 0, testZone)}
 	e, _ := newTestEngine(t, standardHost(c), c)
 	if _, err := e.loadCreds(e.config()); err != nil {
 		t.Fatal(err)
@@ -146,7 +146,7 @@ func TestForecastRatesPaceAndFreshness(t *testing.T) {
 }
 
 func TestQuotaEventsIndependentOfNotifications(t *testing.T) {
-	c := &clock{t: time.Date(2026, 10, 4, 10, 0, 0, 0, shanghai)}
+	c := &clock{t: time.Date(2026, 10, 4, 10, 0, 0, 0, testZone)}
 	e, _ := newTestEngine(t, standardHost(c), c)
 	cfg := e.config()
 	if _, err := e.loadCreds(cfg); err != nil {
@@ -186,7 +186,7 @@ func TestQuotaEventsIndependentOfNotifications(t *testing.T) {
 }
 
 func TestActivePoolDisappearanceAndPassiveTombstone(t *testing.T) {
-	c := &clock{t: time.Date(2026, 10, 4, 10, 0, 0, 0, shanghai)}
+	c := &clock{t: time.Date(2026, 10, 4, 10, 0, 0, 0, testZone)}
 	e, sender := newTestEngine(t, standardHost(c), c)
 	cfg := e.config()
 	if _, err := e.loadCreds(cfg); err != nil {

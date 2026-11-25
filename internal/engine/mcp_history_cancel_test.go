@@ -18,7 +18,7 @@ import (
 	"github.com/PosvdM/cpa-plugin-lamplighter/internal/store"
 )
 
-// scanWatchContext 在真实历史扫描反复检查取消时发出信号，不替代历史后端。
+// scanWatchContext signals repeated cancellation checks during a real history scan.
 type scanWatchContext struct {
 	context.Context
 	checks   atomic.Int32
@@ -58,7 +58,7 @@ func largeHistoryEngine(t *testing.T) *Engine {
 		t.Fatal(err)
 	}
 	raw, _ := json.Marshal(store.Record{Kind: "s", Time: now.Add(-time.Minute).Unix(), Group: "codex:1:gpt", Window: "five-hour", Remaining: 50, Reset: now.Add(time.Hour).Unix()})
-	// 大量重复样本迫使后端扫描文件，但聚合结果只需要一个桶。
+	// Repeated samples force a file scan while the aggregated result needs only one bucket.
 	if err := os.WriteFile(filepath.Join(dir, now.Format("2006-01-02")+".jsonl"), bytes.Repeat(append(raw, '\n'), 150000), 0644); err != nil {
 		t.Fatal(err)
 	}

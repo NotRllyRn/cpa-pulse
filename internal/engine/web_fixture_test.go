@@ -81,7 +81,7 @@ func TestWebPreviewFixture(t *testing.T) {
 		listener.Configure(cfg.MCPEnabled, cfg.MCPListen, cfg.MCPKey)
 		status := e.Status()
 		status.MCP = listener.State()
-		if status.Config.Webhook.URL != "" || status.Config.BarkURL != "已设置" || status.Config.MCPKey != "" {
+		if status.Config.Webhook.URL != "" || status.Config.BarkURL != "set" || status.Config.MCPKey != "" {
 			t.Fatalf("unexpected redaction: %+v", status.Config)
 		}
 		b, err := json.Marshal(raw)

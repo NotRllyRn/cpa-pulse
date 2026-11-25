@@ -22,7 +22,7 @@ func TestMCPAccountLabelFormat(t *testing.T) {
 		{"long user", AccountStatus{Email: "alice.work@example.com"}, 0, "***rk"},
 		{"two characters", AccountStatus{Email: "ab@example.com"}, 0, "***ab"},
 		{"one character", AccountStatus{Email: "a@example.com"}, 0, "***a"},
-		{"unicode", AccountStatus{Email: "用户名@example.com"}, 0, "***户名"},
+		{"unicode", AccountStatus{Email: "résumé@example.com"}, 0, "***mé"},
 		{"no email", AccountStatus{}, 3, "account-4"},
 		{"note first line", AccountStatus{Note: "  Main  \r\nprivate@example.com", Email: "other@example.net"}, 0, "Main"},
 		{"email note", AccountStatus{Note: "alice.work@example.com"}, 0, "***rk"},
@@ -33,8 +33,8 @@ func TestMCPAccountLabelFormat(t *testing.T) {
 		{"unknown quoted note", AccountStatus{Note: `Main "alice.work"@elsewhere.test`}, 0, "Main ***rk"},
 		{"known quoted note", AccountStatus{Note: `Main <"alice work"@example.com>`, Email: `"alice work"@example.com`}, 0, "Main <***rk>"},
 		{"domain literal", AccountStatus{Email: "alice@[IPv6:2001:db8::1]"}, 0, "***ce"},
-		{"unicode whitespace", AccountStatus{Note: "Main\u00a0ghost@[127.0.0.1]\u0085备用\v用户@例子.公司"}, 0, "Main\u00a0***st\u0085备用\v***用户"},
-		{"unicode email note", AccountStatus{Note: "备用 用户名@例子.公司"}, 0, "备用 ***户名"},
+		{"unicode whitespace", AccountStatus{Note: "Main\u00a0ghost@[127.0.0.1]\u0085Spare\vnaïve@café.example"}, 0, "Main\u00a0***st\u0085Spare\v***ve"},
+		{"unicode email note", AccountStatus{Note: "Spare résumé@café.example"}, 0, "Spare ***mé"},
 		{"empty first line", AccountStatus{Note: "\nprivate", Email: "ab@example.com"}, 0, "***ab"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -109,7 +109,7 @@ func TestMCPAccountLabelsAndFilters(t *testing.T) {
 }
 
 func TestMCPToolsMaskEmailsAndFilterAccounts(t *testing.T) {
-	c := &clock{t: time.Date(2026, 10, 4, 10, 0, 0, 0, shanghai)}
+	c := &clock{t: time.Date(2026, 10, 4, 10, 0, 0, 0, testZone)}
 	e, _ := newTestEngine(t, standardHost(c), c)
 	if _, err := e.loadCreds(e.config()); err != nil {
 		t.Fatal(err)
@@ -261,10 +261,10 @@ func TestMCPToolsMaskUnusualEmails(t *testing.T) {
 		{"domain literal", "alice@[IPv6:2001:db8::1]", "other@example.net", "Main <alice@[IPv6:2001:db8::1]> and ghost@[127.0.0.1]", "Main <***ce> and ***st"},
 		{"cross account", "owner@example.com", `"other work"@example.net`, `Main <"other work"@example.net>`, "Main <***rk>"},
 		{"cross account only", "", `"other work"@[IPv6:2001:db8::1]`, `Main <"other work"@[IPv6:2001:db8::1]>`, "Main <***rk>"},
-		{"unknown unicode", "owner@example.com", "other@example.net", "备用 用户名@例子.公司 <ghost@[IPv6:2001:db8::2]>", "备用 ***户名 ***st"},
+		{"unknown unicode", "owner@example.com", "other@example.net", "Spare résumé@café.example <ghost@[IPv6:2001:db8::2]>", "Spare ***mé ***st"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			c := &clock{t: time.Date(2026, 10, 4, 10, 0, 0, 0, shanghai)}
+			c := &clock{t: time.Date(2026, 10, 4, 10, 0, 0, 0, testZone)}
 			e, _ := newTestEngine(t, standardHost(c), c)
 			if _, err := e.loadCreds(e.config()); err != nil {
 				t.Fatal(err)
@@ -336,7 +336,7 @@ func TestMCPToolsMaskUnusualEmails(t *testing.T) {
 }
 
 func TestMCPCurrentAndRetiredAccountIsolation(t *testing.T) {
-	c := &clock{t: time.Date(2026, 10, 4, 10, 0, 0, 0, shanghai)}
+	c := &clock{t: time.Date(2026, 10, 4, 10, 0, 0, 0, testZone)}
 	e, _ := newTestEngine(t, standardHost(c), c)
 	if _, err := e.loadCreds(e.config()); err != nil {
 		t.Fatal(err)

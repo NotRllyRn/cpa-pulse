@@ -18,7 +18,7 @@ func TestStreamCaptureProtocols(t *testing.T) {
 		name, events, reply          string
 		output, terminal, usageFinal bool
 	}{
-		{"chat", "data: {\"choices\":[{\"delta\":{\"content\":\"你好🙂\"}}]}\n\ndata: {\"choices\":[],\"usage\":{\"prompt_tokens\":10,\"completion_tokens\":2}}\n\ndata: [DONE]\n\n", "你好🙂", true, true, false},
+		{"chat", "data: {\"choices\":[{\"delta\":{\"content\":\"café🙂\"}}]}\n\ndata: {\"choices\":[],\"usage\":{\"prompt_tokens\":10,\"completion_tokens\":2}}\n\ndata: [DONE]\n\n", "café🙂", true, true, false},
 		{"responses", "data: {\"type\":\"response.output_text.delta\",\"delta\":\"OK\"}\n\ndata: {\"type\":\"response.completed\",\"response\":{\"usage\":{\"input_tokens\":12,\"output_tokens\":1}}}\n\n", "OK", true, true, true},
 		{"claude", "event: message_start\r\ndata: {\"type\":\"message_start\",\"message\":{\"usage\":{\"input_tokens\":6,\"output_tokens\":0}}}\r\n\r\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"text_delta\",\"text\":\"OK\"}}\n\ndata: {\"type\":\"message_delta\",\"usage\":{\"output_tokens\":1}}\n\ndata: {\"type\":\"message_stop\"}\n\n", "OK", true, true, true},
 		{"empty lifecycle", "data: {\"type\":\"response.created\"}\n\n: ping\n\ndata: {\"choices\":[{\"delta\":{\"role\":\"assistant\",\"content\":\"\"}}]}\n\n", "", false, false, false},
@@ -56,7 +56,7 @@ func TestStreamCaptureProtocols(t *testing.T) {
 }
 
 func TestStreamCaptureFramingBoundaries(t *testing.T) {
-	wire := ": ping\r\nevent: response.output_text.delta\r\ndata: {\"type\":\"response.output_text.delta\",\"delta\":\"你好🙂\"}\r\n\r\nevent: response.completed\r\ndata: {\"type\":\"response.completed\",\"response\":{\"usage\":{\"input_tokens\":2,\"output_tokens\":1}}}\r\n\r\n"
+	wire := ": ping\r\nevent: response.output_text.delta\r\ndata: {\"type\":\"response.output_text.delta\",\"delta\":\"café🙂\"}\r\n\r\nevent: response.completed\r\ndata: {\"type\":\"response.completed\",\"response\":{\"usage\":{\"input_tokens\":2,\"output_tokens\":1}}}\r\n\r\n"
 	for _, protocol := range []string{"claude", "openai-response"} {
 		for split := 0; split <= len(wire); split++ {
 			var s streamCapture
@@ -69,7 +69,7 @@ func TestStreamCaptureFramingBoundaries(t *testing.T) {
 					t.Fatalf("protocol=%s split=%d: %v", protocol, split, err)
 				}
 			}
-			if err := s.finish(); err != nil || s.reply.String() != "你好🙂" || !s.terminal || !s.usageFinal {
+			if err := s.finish(); err != nil || s.reply.String() != "café🙂" || !s.terminal || !s.usageFinal {
 				t.Fatalf("protocol=%s split=%d err=%v reply=%q terminal=%v", protocol, split, err, s.reply.String(), s.terminal)
 			}
 		}
@@ -162,8 +162,8 @@ func TestStreamCaptureFirstOutputHook(t *testing.T) {
 
 func TestStreamCaptureUsageAndUnicodeBounds(t *testing.T) {
 	var s streamCapture
-	s.text(strings.Repeat("你好🙂", 2000))
-	if !utf8.ValidString(s.reply.String()) || utf8.RuneCountInString(s.reply.String()) != replyLimit || s.replyChars != 6000 {
+	s.text(strings.Repeat("café🙂", 2000))
+	if !utf8.ValidString(s.reply.String()) || utf8.RuneCountInString(s.reply.String()) != replyLimit || s.replyChars != 10000 {
 		t.Fatalf("reply chars=%d total=%d", utf8.RuneCountInString(s.reply.String()), s.replyChars)
 	}
 	if s.usage != nil || s.usageFinal {

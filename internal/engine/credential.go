@@ -121,10 +121,10 @@ func (e *Engine) noteFingerprint(cred *Cred, fingerprint string) {
 	st.Changed = true
 	e.dirty = true
 	if st.Fingerprint == "" {
-		e.logf("info", "%s 的凭证在出现问题时无法读取，现在可以读取，恢复自动点火", accountLabel(cred))
+		e.logf("info", "%s credential is readable after an earlier read failure; resuming automatic ignition", accountLabel(cred))
 		return
 	}
-	e.logf("info", "%s 的凭证已更新，恢复自动点火", accountLabel(cred))
+	e.logf("info", "%s credential updated; resuming automatic ignition", accountLabel(cred))
 }
 
 // credentialFingerprint reads the fingerprint of cred's credential file, ""
@@ -211,13 +211,13 @@ func ignitionConfirmed(st *store.CredentialState) bool {
 func (e *Engine) credentialEvent(cred *Cred, group string, d failure.Diagnosis, source string, until time.Time) {
 	label := accountLabel(cred)
 	description := map[string]string{
-		failure.ReasonAuth:        "凭证失效",
-		failure.ReasonSuspended:   "账号已停用",
-		failure.ReasonRateLimited: "被限流",
+		failure.ReasonAuth:        "credential invalid",
+		failure.ReasonSuspended:   "account suspended",
+		failure.ReasonRateLimited: "rate limited",
 	}[d.Reason]
 	detail := joinParts(" · ", d.StatusText(), d.Code, description)
 	if summary := credentialSummary(d); summary != "" {
-		detail += "：" + summary
+		detail += ": " + summary
 	}
 	params := map[string]string{
 		"reason": d.Reason, "status": d.StatusText(), "code": d.Code, "summary": credentialSummary(d),
@@ -266,10 +266,10 @@ func (e *Engine) noteCredentialOK(ctx context.Context, cred *Cred, source string
 	e.dirty = true
 	e.publishCredential(cred.AuthIndex, "")
 	label := accountLabel(cred)
-	detail := map[string]string{sourceIgnite: "点火成功", sourceQuery: "额度查询恢复正常"}[source]
+	detail := map[string]string{sourceIgnite: "Ignition succeeded", sourceQuery: "Quota queries work again"}[source]
 	group := e.accountGroup(cred.AuthIndex)
 	e.addAccountEvent(cred.AuthIndex, "info", "credential_restored", group, label, detail,
-		label+" 凭证已恢复："+detail, map[string]string{"source": source})
+		label+" credential works again: "+detail, map[string]string{"source": source})
 	if !notified {
 		e.forgetEmptyCredential(cred.AuthIndex)
 		return

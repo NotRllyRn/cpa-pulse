@@ -105,7 +105,7 @@ func streamRecord(t *testing.T, h *streamHost) map[string]any {
 		t.Fatalf("unsafe log message: %s", message)
 	}
 	var record map[string]any
-	if err := json.Unmarshal([]byte(strings.TrimPrefix(message, "Lamplighter ignition ")), &record); err != nil {
+	if err := json.Unmarshal([]byte(strings.TrimPrefix(message, "cpa-pulse ignition ")), &record); err != nil {
 		t.Fatal(err)
 	}
 	if record["provider"] != "codex" || record["model"] != "test-model" || record["auth_index"] != "42" || record["correlation_id"] == "" {
@@ -140,7 +140,7 @@ func TestIgnitionStreamNaturalEndAndLog(t *testing.T) {
 	h.event(`{"type":"response.output_item.added","item":{"encrypted_content":"SECRET"}}`)
 	h.event(`{"type":"response.reasoning_summary_text.delta","delta":"brief\n"}`)
 	h.event(`{"type":"response.function_call_arguments.delta","delta":"{}"}`)
-	text, _ := json.Marshal(strings.Repeat("好🙂", 2500))
+	text, _ := json.Marshal(strings.Repeat("é🙂", 2500))
 	h.event(`{"type":"response.output_text.delta","delta":` + string(text) + `}`)
 	h.event(`{"type":"response.completed","response":{"usage":{"input_tokens":12,"output_tokens":19,"output_tokens_details":{"reasoning_tokens":7,"encrypted_content":"SECRET"}}}}`)
 	e := New(Options{Host: h})
@@ -283,7 +283,7 @@ func TestIgnitionStreamUsageProvenance(t *testing.T) {
 				t.Fatalf("err=%v closes=%d logs=%v", err, h.closes, h.messages)
 			}
 			var record map[string]any
-			if err := json.Unmarshal([]byte(strings.TrimPrefix(h.messages[0], "Lamplighter ignition ")), &record); err != nil {
+			if err := json.Unmarshal([]byte(strings.TrimPrefix(h.messages[0], "cpa-pulse ignition ")), &record); err != nil {
 				t.Fatal(err)
 			}
 			if record["usage_completeness"] != tc.completeness || record["usage_source"] != "cpa_host" || record["end_reason"] != "completed" {
@@ -560,7 +560,7 @@ func TestIgnitionStreamErrorsKeepFailureProtection(t *testing.T) {
 	for _, channel := range []string{"host", "error", "response.failed"} {
 		for _, failure := range []string{"rate_limit_exceeded", "authentication_error", "model_not_found", "normalized_authentication", "explicit_authentication_status", "usage_limit_reached", "suspended"} {
 			t.Run(channel+"/"+failure, func(t *testing.T) {
-				c := &clock{t: time.Date(2026, 10, 4, 10, 0, 0, 0, shanghai)}
+				c := &clock{t: time.Date(2026, 10, 4, 10, 0, 0, 0, testZone)}
 				base := claudeIgnitionHost(c, nil)
 				e, _ := newTestEngine(t, base, c)
 				e.poll(context.Background(), e.config(), c.t, "", false)
@@ -638,7 +638,7 @@ func TestIgnitionStreamErrorsKeepFailureProtection(t *testing.T) {
 }
 
 func TestIgnitionCutoffConfirmsQuotaWindow(t *testing.T) {
-	c := &clock{t: time.Date(2026, 10, 4, 10, 0, 0, 0, shanghai)}
+	c := &clock{t: time.Date(2026, 10, 4, 10, 0, 0, 0, testZone)}
 	base := claudeIgnitionHost(c, nil)
 	e, _ := newTestEngine(t, base, c)
 	e.poll(context.Background(), e.config(), c.t, "", false)
@@ -671,8 +671,8 @@ func TestIgnitionCutoffConfirmsQuotaWindow(t *testing.T) {
 	}
 	var record map[string]any
 	for _, message := range h.messages {
-		if strings.HasPrefix(message, "Lamplighter ignition ") {
-			if err := json.Unmarshal([]byte(strings.TrimPrefix(message, "Lamplighter ignition ")), &record); err != nil {
+		if strings.HasPrefix(message, "cpa-pulse ignition ") {
+			if err := json.Unmarshal([]byte(strings.TrimPrefix(message, "cpa-pulse ignition ")), &record); err != nil {
 				t.Fatal(err)
 			}
 		}
@@ -683,7 +683,7 @@ func TestIgnitionCutoffConfirmsQuotaWindow(t *testing.T) {
 }
 
 func TestIgnitionCutoffDoesNotFallbackOrConfirmFromBody(t *testing.T) {
-	c := &clock{t: time.Date(2026, 10, 4, 10, 0, 0, 0, shanghai)}
+	c := &clock{t: time.Date(2026, 10, 4, 10, 0, 0, 0, testZone)}
 	base := claudeIgnitionHost(c, nil)
 	e, _ := newTestEngine(t, base, c)
 	e.poll(context.Background(), e.config(), c.t, "", false)

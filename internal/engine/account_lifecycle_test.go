@@ -15,7 +15,7 @@ import (
 )
 
 func TestStatusAccountOrderUsesCredentialFileNames(t *testing.T) {
-	c := &clock{t: time.Date(2026, 10, 4, 10, 0, 0, 0, shanghai)}
+	c := &clock{t: time.Date(2026, 10, 4, 10, 0, 0, 0, testZone)}
 	e, _ := newTestEngine(t, standardHost(c), c)
 	if _, err := e.loadCreds(e.config()); err != nil {
 		t.Fatal(err)
@@ -48,7 +48,7 @@ func TestStatusAccountOrderUsesCredentialFileNames(t *testing.T) {
 }
 
 func TestStatusHidesMCPKeyWithoutChangingRuntimeConfig(t *testing.T) {
-	c := &clock{t: time.Date(2026, 10, 4, 10, 0, 0, 0, shanghai)}
+	c := &clock{t: time.Date(2026, 10, 4, 10, 0, 0, 0, testZone)}
 	e, _ := newTestEngine(t, standardHost(c), c)
 	for _, key := range []string{"", "private-mcp-token"} {
 		cfg := e.config()
@@ -81,7 +81,7 @@ func TestActiveWindowDisappearanceAndReturn(t *testing.T) {
 				name += "/without_live_view"
 			}
 			t.Run(name, func(t *testing.T) {
-				c := &clock{t: time.Date(2026, 10, 4, 10, 0, 0, 0, shanghai)}
+				c := &clock{t: time.Date(2026, 10, 4, 10, 0, 0, 0, testZone)}
 				e, sender := newTestEngine(t, standardHost(c), c)
 				cfg := e.config()
 				cfg.RecoveryNotify = config.WindowModes{FiveHour: config.RecoveryAll, SevenDay: config.RecoveryAll}

@@ -38,7 +38,7 @@ func checkManualFailure(t *testing.T, e *Engine, sender *fakeSender, c *clock, c
 		}
 		ev := e.events[len(e.events)-1]
 		if p := ev.Params; ev.Kind != "ignite_failed" || p["manual"] != "1" || p["error"] != err.Error() || p["summary"] == "" || p["retry_seconds"] != "" ||
-			ev.Detail != err.Error() || strings.Contains(ev.Message+ev.Detail, "重试") {
+			ev.Detail != err.Error() || strings.Contains(ev.Message+ev.Detail, "retry") {
 			t.Fatalf("manual failure must display error without retry: %+v", ev)
 		}
 	}
@@ -53,7 +53,7 @@ func TestManualFailurePreservesAutomaticSchedule(t *testing.T) {
 	for name, failure := range failures {
 		for _, seeded := range []bool{false, true} {
 			t.Run(name+"/seeded="+map[bool]string{false: "false", true: "true"}[seeded], func(t *testing.T) {
-				c := &clock{t: time.Date(2026, 10, 4, 10, 0, 0, 0, shanghai)}
+				c := &clock{t: time.Date(2026, 10, 4, 10, 0, 0, 0, testZone)}
 				h := claudeIgnitionHost(c, nil)
 				h.execute = func(pluginapi.HostModelExecutionRequest) (pluginapi.HostModelExecutionResponse, error) {
 					return pluginapi.HostModelExecutionResponse{}, failure

@@ -87,7 +87,7 @@ func (f *fakeSender) Send(_ context.Context, msg notify.Message) error {
 	return nil
 }
 
-var shanghai = time.FixedZone("UTC+8", 8*3600)
+var testZone = time.FixedZone("UTC+8", 8*3600)
 
 type clock struct{ t time.Time }
 
@@ -111,7 +111,7 @@ func newTestEngineIn(t *testing.T, h *fakeHost, c *clock, dir string) (*Engine, 
 	cfg.CPABaseURL = models.URL
 	cfg.ModelsAPIKey = "k"
 	cfg.DataDir = dir
-	cfg.Timezone = "Asia/Shanghai"
+	cfg.Timezone = "Asia/Singapore"
 	e := New(Options{Host: h, Version: "test", Now: c.now})
 	e.Configure(cfg, nil)
 	if err := e.openStores(cfg); err != nil {
@@ -159,7 +159,7 @@ func standardHost(c *clock) *fakeHost {
 }
 
 func TestPollBuildsAccountsWithSuffixes(t *testing.T) {
-	c := &clock{t: time.Date(2026, 10, 4, 10, 0, 0, 0, shanghai)}
+	c := &clock{t: time.Date(2026, 10, 4, 10, 0, 0, 0, testZone)}
 	h := standardHost(c)
 	e, _ := newTestEngine(t, h, c)
 	e.poll(context.Background(), e.config(), c.t, "", false)
@@ -187,13 +187,13 @@ func TestPollBuildsAccountsWithSuffixes(t *testing.T) {
 }
 
 func TestNotesNameAccounts(t *testing.T) {
-	c := &clock{t: time.Date(2026, 10, 4, 10, 0, 0, 0, shanghai)}
+	c := &clock{t: time.Date(2026, 10, 4, 10, 0, 0, 0, testZone)}
 	h := standardHost(c)
 	e, _ := newTestEngine(t, h, c)
 	h.auths = []pluginapi.HostAuthFileEntry{
-		{ID: "codex-a.json", AuthIndex: "1", Name: "codex-a.json", Provider: "codex", Email: "alice.work@example.com", Note: " 主力号 "},
+		{ID: "codex-a.json", AuthIndex: "1", Name: "codex-a.json", Provider: "codex", Email: "alice.work@example.com", Note: " résumé "},
 		{ID: "codex-b.json", AuthIndex: "2", Name: "codex-b.json", Provider: "codex", Email: "bob.team@example.net"},
-		{ID: "claude.json", AuthIndex: "3", Name: "claude.json", Provider: "claude", Email: "me@example.com", Note: "工作\n2026-09 购入"},
+		{ID: "claude.json", AuthIndex: "3", Name: "claude.json", Provider: "claude", Email: "me@example.com", Note: "café\nPurchased 2026-09"},
 		{ID: "ag.json", AuthIndex: "4", Name: "ag.json", Provider: "antigravity", Note: "a very long account name for testing"},
 	}
 	creds, err := e.loadCreds(e.config())
@@ -204,13 +204,13 @@ func TestNotesNameAccounts(t *testing.T) {
 	for _, cred := range creds {
 		suffixes = append(suffixes, cred.Suffix)
 	}
-	if got := strings.Join(suffixes, ","); got != "#主力号,#am,#工作,#a very long account …" {
+	if got := strings.Join(suffixes, ","); got != "#résumé,#am,#café,#a very long account …" {
 		t.Fatalf("suffixes %s", got)
 	}
 
-	h.auths[1].Note = "主力号"
+	h.auths[1].Note = "résumé"
 	creds, _ = e.loadCreds(e.config())
-	if creds[0].Suffix != "#主力号#rk" || creds[1].Suffix != "#主力号#am" {
+	if creds[0].Suffix != "#résumé#rk" || creds[1].Suffix != "#résumé#am" {
 		t.Fatalf("same names %q %q", creds[0].Suffix, creds[1].Suffix)
 	}
 
@@ -224,7 +224,7 @@ func TestNotesNameAccounts(t *testing.T) {
 }
 
 func TestStatusOrdersGroupsLikeThePage(t *testing.T) {
-	c := &clock{t: time.Date(2026, 10, 4, 10, 0, 0, 0, shanghai)}
+	c := &clock{t: time.Date(2026, 10, 4, 10, 0, 0, 0, testZone)}
 	h := standardHost(c)
 	base := h.http
 	h.http = func(req pluginapi.HTTPRequest) pluginapi.HTTPResponse {
@@ -247,7 +247,7 @@ func TestStatusOrdersGroupsLikeThePage(t *testing.T) {
 }
 
 func TestPassiveDataSkipsActiveQueryNearTheSlot(t *testing.T) {
-	c := &clock{t: time.Date(2026, 10, 4, 10, 0, 0, 0, shanghai)}
+	c := &clock{t: time.Date(2026, 10, 4, 10, 0, 0, 0, testZone)}
 	h := standardHost(c)
 	e, _ := newTestEngine(t, h, c)
 	ctx := context.Background()
@@ -312,7 +312,7 @@ func claudeIgnitionHost(c *clock, failFirst error) *fakeHost {
 }
 
 func TestIgnitionIsConfirmedFromResponseHeaders(t *testing.T) {
-	c := &clock{t: time.Date(2026, 10, 4, 10, 0, 0, 0, shanghai)}
+	c := &clock{t: time.Date(2026, 10, 4, 10, 0, 0, 0, testZone)}
 	h := claudeIgnitionHost(c, nil)
 	e, _ := newTestEngine(t, h, c)
 	ctx := context.Background()
@@ -351,7 +351,7 @@ func TestIgnitionIsConfirmedFromResponseHeaders(t *testing.T) {
 }
 
 func TestIgnitionTriesNextModelWhenCredentialRejectsOne(t *testing.T) {
-	c := &clock{t: time.Date(2026, 10, 4, 10, 0, 0, 0, shanghai)}
+	c := &clock{t: time.Date(2026, 10, 4, 10, 0, 0, 0, testZone)}
 	h := claudeIgnitionHost(c, &host.Error{Code: "host_call_failed", Message: "auth_not_found: no auth available", Status: 503})
 	e, _ := newTestEngine(t, h, c)
 	ctx := context.Background()
@@ -369,7 +369,7 @@ func TestIgnitionTriesNextModelWhenCredentialRejectsOne(t *testing.T) {
 }
 
 func TestIgnitionUsesNewestModelOverLastSuccessfulOne(t *testing.T) {
-	c := &clock{t: time.Date(2026, 10, 4, 10, 0, 0, 0, shanghai)}
+	c := &clock{t: time.Date(2026, 10, 4, 10, 0, 0, 0, testZone)}
 	h := claudeIgnitionHost(c, nil)
 	e, _ := newTestEngine(t, h, c)
 	ctx := context.Background()
@@ -388,7 +388,7 @@ func TestIgnitionUsesNewestModelOverLastSuccessfulOne(t *testing.T) {
 }
 
 func TestIgnitionFallsBackWhenProviderRefusesNewestModel(t *testing.T) {
-	c := &clock{t: time.Date(2026, 10, 4, 10, 0, 0, 0, shanghai)}
+	c := &clock{t: time.Date(2026, 10, 4, 10, 0, 0, 0, testZone)}
 	refused := &host.Error{Code: "model_execution_failed", Message: `{"type":"error","error":{"type":"not_found_error","message":"model: claude-haiku-4-5-20251001"}}`, Status: 404}
 	h := claudeIgnitionHost(c, refused)
 	e, _ := newTestEngine(t, h, c)
@@ -431,7 +431,7 @@ func TestIgnitionFallsBackWhenProviderRefusesNewestModel(t *testing.T) {
 }
 
 func TestIgnitionFallsBackOnlyOnceForRefusedModels(t *testing.T) {
-	c := &clock{t: time.Date(2026, 10, 4, 10, 0, 0, 0, shanghai)}
+	c := &clock{t: time.Date(2026, 10, 4, 10, 0, 0, 0, testZone)}
 	h := claudeIgnitionHost(c, nil)
 	h.execute = func(pluginapi.HostModelExecutionRequest) (pluginapi.HostModelExecutionResponse, error) {
 		return pluginapi.HostModelExecutionResponse{StatusCode: 400, Body: []byte(`{"type":"error","error":{"type":"invalid_request_error"}}`)}, nil
@@ -450,7 +450,7 @@ func TestIgnitionFallsBackOnlyOnceForRefusedModels(t *testing.T) {
 	if ts.CircuitOpenUntilEpoch == 0 {
 		t.Fatalf("a second refusal must pause the target: %+v", ts)
 	}
-	if !strings.Contains(ts.LastError, "此前 claude-haiku-4-5-20251001 被上游拒绝（状态码 400）") {
+	if !strings.Contains(ts.LastError, "earlier claude-haiku-4-5-20251001 was rejected by the provider (status 400)") {
 		t.Fatalf("the error must name the first refused model: %s", ts.LastError)
 	}
 	for _, ev := range e.Status().Events {
@@ -461,7 +461,7 @@ func TestIgnitionFallsBackOnlyOnceForRefusedModels(t *testing.T) {
 }
 
 func TestStatusShowsNextAutomaticModels(t *testing.T) {
-	c := &clock{t: time.Date(2026, 10, 4, 10, 0, 0, 0, shanghai)}
+	c := &clock{t: time.Date(2026, 10, 4, 10, 0, 0, 0, testZone)}
 	h := claudeIgnitionHost(c, nil)
 	e, _ := newTestEngine(t, h, c)
 	ctx := context.Background()
@@ -484,14 +484,14 @@ func TestStatusReportsNewerRelease(t *testing.T) {
 	tag, status := "v0.5.0", http.StatusOK
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(status)
-		w.Write([]byte(`{"tag_name":"` + tag + `","html_url":"https://github.com/PosvdM/cpa-plugin-lamplighter/releases/tag/` + tag + `"}`))
+		w.Write([]byte(`{"tag_name":"` + tag + `","html_url":"https://github.com/NotRllyRn/cpa-pulse/releases/tag/` + tag + `"}`))
 	}))
 	t.Cleanup(server.Close)
 	old := release.LatestURL
 	release.LatestURL = server.URL
 	t.Cleanup(func() { release.LatestURL = old })
 
-	c := &clock{t: time.Date(2026, 10, 4, 10, 0, 0, 0, shanghai)}
+	c := &clock{t: time.Date(2026, 10, 4, 10, 0, 0, 0, testZone)}
 	e, _ := newTestEngine(t, standardHost(c), c)
 	e.version = "0.4.0"
 	ctx := context.Background()
@@ -499,7 +499,7 @@ func TestStatusReportsNewerRelease(t *testing.T) {
 		t.Fatalf("next check %v", next)
 	}
 	got := e.Status()
-	if got.LatestVersion != "0.5.0" || got.ReleaseURL != "https://github.com/PosvdM/cpa-plugin-lamplighter/releases/tag/v0.5.0" {
+	if got.LatestVersion != "0.5.0" || got.ReleaseURL != "https://github.com/NotRllyRn/cpa-pulse/releases/tag/v0.5.0" {
 		t.Fatalf("latest %q %q", got.LatestVersion, got.ReleaseURL)
 	}
 
@@ -528,14 +528,14 @@ func TestCheckReleaseOnOpen(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		reads.Add(1)
 		w.WriteHeader(int(status.Load()))
-		w.Write([]byte(`{"tag_name":"v0.5.0","html_url":"https://github.com/PosvdM/cpa-plugin-lamplighter/releases/tag/v0.5.0"}`))
+		w.Write([]byte(`{"tag_name":"v0.5.0","html_url":"https://github.com/NotRllyRn/cpa-pulse/releases/tag/v0.5.0"}`))
 	}))
 	t.Cleanup(server.Close)
 	old := release.LatestURL
 	release.LatestURL = server.URL
 	t.Cleanup(func() { release.LatestURL = old })
 
-	c := &clock{t: time.Date(2026, 10, 4, 10, 0, 0, 0, shanghai)}
+	c := &clock{t: time.Date(2026, 10, 4, 10, 0, 0, 0, testZone)}
 	e, _ := newTestEngine(t, standardHost(c), c)
 	e.version = "0.4.0"
 	e.running = false
@@ -593,7 +593,7 @@ func TestCheckReleaseOnOpen(t *testing.T) {
 }
 
 func TestModelListIsReadAfterStartAndKeyChange(t *testing.T) {
-	c := &clock{t: time.Date(2026, 10, 4, 10, 0, 0, 0, shanghai)}
+	c := &clock{t: time.Date(2026, 10, 4, 10, 0, 0, 0, testZone)}
 	h := standardHost(c)
 	e, _ := newTestEngine(t, h, c)
 	reads := 0
@@ -650,7 +650,7 @@ func TestModelListIsReadAfterStartAndKeyChange(t *testing.T) {
 }
 
 func TestHardIgnitionFailurePausesAndNotifiesOnce(t *testing.T) {
-	c := &clock{t: time.Date(2026, 10, 4, 10, 0, 0, 0, shanghai)}
+	c := &clock{t: time.Date(2026, 10, 4, 10, 0, 0, 0, testZone)}
 	h := claudeIgnitionHost(c, nil)
 	h.execute = func(pluginapi.HostModelExecutionRequest) (pluginapi.HostModelExecutionResponse, error) {
 		return pluginapi.HostModelExecutionResponse{}, &host.Error{Code: "host_call_failed", Message: "conflict", Status: 409}
@@ -668,7 +668,7 @@ func TestHardIgnitionFailurePausesAndNotifiesOnce(t *testing.T) {
 	}
 	paused := 0
 	for _, msg := range sender.sent {
-		if strings.Contains(msg.Title, "点火已暂停") {
+		if strings.Contains(msg.Title, "ignition paused") {
 			paused++
 		}
 	}
@@ -678,7 +678,7 @@ func TestHardIgnitionFailurePausesAndNotifiesOnce(t *testing.T) {
 }
 
 func TestHistoryRecordsActiveAndPassiveSamples(t *testing.T) {
-	c := &clock{t: time.Date(2026, 10, 4, 10, 0, 0, 0, shanghai)}
+	c := &clock{t: time.Date(2026, 10, 4, 10, 0, 0, 0, testZone)}
 	h := standardHost(c)
 	e, _ := newTestEngine(t, h, c)
 	ctx := context.Background()
@@ -713,7 +713,7 @@ func TestHistoryRecordsActiveAndPassiveSamples(t *testing.T) {
 }
 
 func TestHistoryFiltersWindowKindAndBucketsLongSpans(t *testing.T) {
-	c := &clock{t: time.Date(2026, 10, 4, 10, 0, 0, 0, shanghai)}
+	c := &clock{t: time.Date(2026, 10, 4, 10, 0, 0, 0, testZone)}
 	h := standardHost(c)
 	e, _ := newTestEngine(t, h, c)
 	ctx := context.Background()
@@ -764,7 +764,7 @@ func TestHistoryFiltersWindowKindAndBucketsLongSpans(t *testing.T) {
 }
 
 func TestHistoryStartsWithTheLastSampleBeforeTheSpan(t *testing.T) {
-	c := &clock{t: time.Date(2026, 10, 4, 10, 7, 0, 0, shanghai)}
+	c := &clock{t: time.Date(2026, 10, 4, 10, 7, 0, 0, testZone)}
 	e, _ := newTestEngine(t, standardHost(c), c)
 	sample := func(group string, at time.Time, remaining float64) store.Record {
 		return store.Record{Kind: "s", Time: at.Unix(), Group: group, Window: "five-hour", Remaining: remaining, Source: "active"}
@@ -825,21 +825,48 @@ func TestHistoryBucketKeepsAbout800Points(t *testing.T) {
 	}
 }
 
-func TestLanguageReportedByThePageIsUsedForNotifications(t *testing.T) {
-	c := &clock{t: time.Date(2026, 10, 4, 10, 0, 0, 0, shanghai)}
+func TestStoredLanguageResolvesToEnglish(t *testing.T) {
+	e := New(Options{DataDir: t.TempDir()})
+	if got := e.Status().Language; got != "en" {
+		t.Fatalf("initial language %q", got)
+	}
+	if err := e.openStores(e.config()); err != nil {
+		t.Fatal(err)
+	}
+	e.state.Language = "fr-FR"
+	if err := e.stateFile.Save(e.state); err != nil {
+		t.Fatal(err)
+	}
+	if err := e.openStores(e.config()); err != nil {
+		t.Fatal(err)
+	}
+	if e.state.Language != "en" || e.language() != "en" || e.Status().Language != "en" {
+		t.Fatalf("loaded language %q", e.state.Language)
+	}
+	e.saveState()
+	state, _, err := e.stateFile.Load()
+	if err != nil || state.Language != "en" {
+		t.Fatalf("saved language %q, error %v", state.Language, err)
+	}
+}
+
+func TestPageLanguageAlwaysResolvesToEnglish(t *testing.T) {
+	c := &clock{t: time.Date(2026, 10, 4, 10, 0, 0, 0, testZone)}
 	h := claudeIgnitionHost(c, nil)
 	h.execute = func(pluginapi.HostModelExecutionRequest) (pluginapi.HostModelExecutionResponse, error) {
 		return pluginapi.HostModelExecutionResponse{}, &host.Error{Code: "host_call_failed", Message: "conflict", Status: 409}
 	}
 	e, sender := newTestEngine(t, h, c)
 	ctx := context.Background()
-	cmd := command{kind: "language", arg: "en-US", reply: make(chan commandReply, 1)}
-	e.runCommand(ctx, cmd)
-	if err := (<-cmd.reply).err; err != nil {
-		t.Fatal(err)
-	}
-	if e.Status().Language != "en" || e.state.Language != "en" {
-		t.Fatalf("language %q, state %q", e.Status().Language, e.state.Language)
+	for _, lang := range []string{"en-US", "fr-FR", "", "unsupported"} {
+		cmd := command{kind: "language", arg: lang, reply: make(chan commandReply, 1)}
+		e.runCommand(ctx, cmd)
+		if err := (<-cmd.reply).err; err != nil {
+			t.Fatal(err)
+		}
+		if e.Status().Language != "en" || e.state.Language != "en" || e.alerts.Lang != "en" {
+			t.Fatalf("input %q: status %q, state %q, alerts %q", lang, e.Status().Language, e.state.Language, e.alerts.Lang)
+		}
 	}
 	cfg := e.config()
 	cfg.Providers["codex"] = config.Provider{Monitor: true}
@@ -861,7 +888,7 @@ func TestLanguageReportedByThePageIsUsedForNotifications(t *testing.T) {
 }
 
 func TestQueriesAroundResetRunOncePerReset(t *testing.T) {
-	start := time.Date(2026, 10, 4, 10, 0, 0, 0, shanghai)
+	start := time.Date(2026, 10, 4, 10, 0, 0, 0, testZone)
 	c := &clock{t: start}
 	// The host's reset times follow a separate clock, so they stay fixed.
 	h := standardHost(&clock{t: start})
@@ -935,7 +962,7 @@ func TestQueriesAroundResetRunOncePerReset(t *testing.T) {
 }
 
 func TestPassiveRelativeResetCountsFromTheRequest(t *testing.T) {
-	c := &clock{t: time.Date(2026, 10, 4, 10, 0, 0, 0, shanghai)}
+	c := &clock{t: time.Date(2026, 10, 4, 10, 0, 0, 0, testZone)}
 	h := standardHost(c)
 	e, _ := newTestEngine(t, h, c)
 	ctx := context.Background()
@@ -962,7 +989,7 @@ func TestPassiveRelativeResetCountsFromTheRequest(t *testing.T) {
 }
 
 func TestOlderPassiveReadingDoesNotRepeatAlert(t *testing.T) {
-	c := &clock{t: time.Date(2026, 10, 4, 10, 0, 0, 0, shanghai)}
+	c := &clock{t: time.Date(2026, 10, 4, 10, 0, 0, 0, testZone)}
 	h := standardHost(c)
 	e, sender := newTestEngine(t, h, c)
 	ctx := context.Background()
@@ -1007,7 +1034,7 @@ func TestOlderPassiveReadingDoesNotRepeatAlert(t *testing.T) {
 }
 
 func TestStatusListsProvidersForTheSettings(t *testing.T) {
-	c := &clock{t: time.Date(2026, 10, 4, 10, 0, 0, 0, shanghai)}
+	c := &clock{t: time.Date(2026, 10, 4, 10, 0, 0, 0, testZone)}
 	e, _ := newTestEngine(t, standardHost(c), c)
 	status := e.Status()
 	var ids []string
@@ -1018,7 +1045,7 @@ func TestStatusListsProvidersForTheSettings(t *testing.T) {
 		t.Fatalf("providers %v", ids)
 	}
 	ag := status.Providers[2]
-	if ag.ID != "antigravity" || !ag.Ignite || strings.Join(ag.Groups, ",") != "Gemini,Claude / GPT" || ag.GroupsHint == nil || ag.ModelHint.Zh != "最新的 Flash" {
+	if ag.ID != "antigravity" || !ag.Ignite || strings.Join(ag.Groups, ",") != "Gemini,Claude / GPT" || ag.GroupsHint == nil || ag.ModelHint.En != "latest Flash" {
 		t.Fatalf("antigravity %+v", ag)
 	}
 	if status.Providers[0].Groups != nil || status.Providers[0].GroupsHint != nil {
@@ -1030,7 +1057,7 @@ func TestStatusListsProvidersForTheSettings(t *testing.T) {
 }
 
 func TestPassiveDataDoesNotAddWindowsTheUsageAPIOmits(t *testing.T) {
-	c := &clock{t: time.Date(2026, 10, 4, 10, 0, 0, 0, shanghai)}
+	c := &clock{t: time.Date(2026, 10, 4, 10, 0, 0, 0, testZone)}
 	h := standardHost(c)
 	base := h.http
 	// A ChatGPT Pro account: the usage API reports only a weekly window.
@@ -1094,7 +1121,7 @@ func grokHost(c *clock) *fakeHost {
 }
 
 func TestGrokIsMonitoredButNeverIgnited(t *testing.T) {
-	c := &clock{t: time.Date(2026, 10, 4, 10, 0, 0, 0, shanghai)}
+	c := &clock{t: time.Date(2026, 10, 4, 10, 0, 0, 0, testZone)}
 	h := grokHost(c)
 	e, _ := newTestEngine(t, h, c)
 	cfg := e.config()
@@ -1124,7 +1151,7 @@ func TestGrokIsMonitoredButNeverIgnited(t *testing.T) {
 }
 
 func TestKimiAliasIsMonitoredButNeverIgnited(t *testing.T) {
-	c := &clock{t: time.Date(2026, 10, 4, 10, 0, 0, 0, shanghai)}
+	c := &clock{t: time.Date(2026, 10, 4, 10, 0, 0, 0, testZone)}
 	h := &fakeHost{
 		auths: []pluginapi.HostAuthFileEntry{{ID: "kimi-a.json", AuthIndex: "7", Name: "kimi-a.json", Provider: "kimi-ai", Email: "k@example.com"}},
 		files: map[string]string{"7": `{"access_token":"t7","type":"kimi-ai"}`},
@@ -1156,7 +1183,7 @@ func TestKimiAliasIsMonitoredButNeverIgnited(t *testing.T) {
 }
 
 func TestPlansComeFromTheUsageResponseAndADailyProfile(t *testing.T) {
-	c := &clock{t: time.Date(2026, 10, 20, 10, 0, 0, 0, shanghai)}
+	c := &clock{t: time.Date(2026, 10, 20, 10, 0, 0, 0, testZone)}
 	h := standardHost(c)
 	usage := h.http
 	profileStatus := 500
@@ -1305,7 +1332,7 @@ func agPlan(e *Engine) string {
 }
 
 func TestPlanChangeIsNotifiedInsteadOfQuotaAlerts(t *testing.T) {
-	c := &clock{t: time.Date(2026, 10, 22, 15, 0, 0, 0, shanghai)}
+	c := &clock{t: time.Date(2026, 10, 22, 15, 0, 0, 0, testZone)}
 	world := &planWorld{paid: true}
 	h := planHost(c, world)
 	e, _ := newTestEngine(t, h, c)
@@ -1326,7 +1353,7 @@ func TestPlanChangeIsNotifiedInsteadOfQuotaAlerts(t *testing.T) {
 	// fresh weekly quota of the new plan is no recovery.
 	world.paid = false
 	poll()
-	if got := sender.titles(); agPlan(e) != "Free" || len(got) != 1 || got[0] != "🎫 Antigravity · 套餐 Pro → Free" {
+	if got := sender.titles(); agPlan(e) != "Free" || len(got) != 1 || got[0] != "🎫 Antigravity · plan Pro → Free" {
 		t.Fatalf("after the expiry: plan %q, sent %v", agPlan(e), got)
 	}
 	var found bool
@@ -1364,7 +1391,7 @@ func TestPlanChangeIsNotifiedInsteadOfQuotaAlerts(t *testing.T) {
 		t.Fatalf("after the renewal: plan %q, sent %v", agPlan(e), got)
 	}
 	poll()
-	if got := sender.titles(); len(got) != 1 || got[0] != "🎫 Antigravity · 套餐 Free → Pro" {
+	if got := sender.titles(); len(got) != 1 || got[0] != "🎫 Antigravity · plan Free → Pro" {
 		t.Fatalf("retry: sent %v", got)
 	}
 
@@ -1376,7 +1403,7 @@ func TestPlanChangeIsNotifiedInsteadOfQuotaAlerts(t *testing.T) {
 }
 
 func TestPlanIsRecheckedAfterARestartAndAFailedRead(t *testing.T) {
-	c := &clock{t: time.Date(2026, 10, 22, 15, 0, 0, 0, shanghai)}
+	c := &clock{t: time.Date(2026, 10, 22, 15, 0, 0, 0, testZone)}
 	world := &planWorld{paid: true}
 	h := planHost(c, world)
 	e, _ := newTestEngine(t, h, c)
@@ -1401,7 +1428,7 @@ func TestPlanIsRecheckedAfterARestartAndAFailedRead(t *testing.T) {
 	world.profileStatus = 0
 	c.add(5 * time.Minute)
 	e.poll(context.Background(), e.config(), c.t, "", false)
-	if got := sender.titles(); agPlan(e) != "Free" || len(got) != 1 || got[0] != "🎫 Antigravity · 套餐 Pro → Free" {
+	if got := sender.titles(); agPlan(e) != "Free" || len(got) != 1 || got[0] != "🎫 Antigravity · plan Pro → Free" {
 		t.Fatalf("plan %q, sent %v", agPlan(e), got)
 	}
 	c.add(5 * time.Minute)
@@ -1412,7 +1439,7 @@ func TestPlanIsRecheckedAfterARestartAndAFailedRead(t *testing.T) {
 }
 
 func TestPlanNoticeIsCancelledByAChangeBackAndDroppedAfterAnHour(t *testing.T) {
-	c := &clock{t: time.Date(2026, 10, 22, 15, 0, 0, 0, shanghai)}
+	c := &clock{t: time.Date(2026, 10, 22, 15, 0, 0, 0, testZone)}
 	world := &planWorld{paid: true}
 	h := planHost(c, world)
 	e, _ := newTestEngine(t, h, c)
@@ -1448,7 +1475,7 @@ func TestPlanNoticeIsCancelledByAChangeBackAndDroppedAfterAnHour(t *testing.T) {
 }
 
 func TestQuotaAlertsResumeWhenThePlanCannotBeRead(t *testing.T) {
-	c := &clock{t: time.Date(2026, 10, 22, 15, 0, 0, 0, shanghai)}
+	c := &clock{t: time.Date(2026, 10, 22, 15, 0, 0, 0, testZone)}
 	world := &planWorld{paid: true}
 	h := planHost(c, world)
 	e, _ := newTestEngine(t, h, c)
@@ -1464,13 +1491,13 @@ func TestQuotaAlertsResumeWhenThePlanCannotBeRead(t *testing.T) {
 	poll()
 	world.paid = false
 	poll()
-	if got := sender.titles(); agPlan(e) != "" || len(got) != 1 || !strings.Contains(got[0], "已恢复") {
+	if got := sender.titles(); agPlan(e) != "" || len(got) != 1 || !strings.Contains(got[0], "recovered") {
 		t.Fatalf("without a plan: plan %q, sent %v", agPlan(e), got)
 	}
 }
 
 func TestPlanIsReadSoonAfterARecheckThatKeptFailing(t *testing.T) {
-	c := &clock{t: time.Date(2026, 10, 22, 15, 0, 0, 0, shanghai)}
+	c := &clock{t: time.Date(2026, 10, 22, 15, 0, 0, 0, testZone)}
 	world := &planWorld{paid: true}
 	h := planHost(c, world)
 	e, _ := newTestEngine(t, h, c)
@@ -1494,7 +1521,7 @@ func TestPlanIsReadSoonAfterARecheckThatKeptFailing(t *testing.T) {
 		}
 	}
 	poll()
-	if got := sender.titles(); agPlan(e) != "Pro" || len(got) != 1 || !strings.Contains(got[0], "已恢复") {
+	if got := sender.titles(); agPlan(e) != "Pro" || len(got) != 1 || !strings.Contains(got[0], "recovered") {
 		t.Fatalf("after the recheck: plan %q, sent %v", agPlan(e), got)
 	}
 
@@ -1504,7 +1531,7 @@ func TestPlanIsReadSoonAfterARecheckThatKeptFailing(t *testing.T) {
 	for i := 0; i < 3 && agPlan(e) == "Pro"; i++ {
 		poll()
 	}
-	if got := sender.titles(); agPlan(e) != "Free" || h.requestsTo(providers.AntigravityLoadCodeAssistURL) != reads+1 || len(got) != 1 || got[0] != "🎫 Antigravity · 套餐 Pro → Free" {
+	if got := sender.titles(); agPlan(e) != "Free" || h.requestsTo(providers.AntigravityLoadCodeAssistURL) != reads+1 || len(got) != 1 || got[0] != "🎫 Antigravity · plan Pro → Free" {
 		t.Fatalf("after the retry: plan %q, sent %v", agPlan(e), got)
 	}
 }

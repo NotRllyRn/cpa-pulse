@@ -18,7 +18,7 @@ func TestAbsentWindowSurvivesRestartAndFailedActiveQuery(t *testing.T) {
 			name = "empty-group"
 		}
 		t.Run(name, func(t *testing.T) {
-			c := &clock{t: time.Date(2026, 10, 4, 10, 0, 0, 0, shanghai)}
+			c := &clock{t: time.Date(2026, 10, 4, 10, 0, 0, 0, testZone)}
 			h := standardHost(c)
 			e, _ := newTestEngine(t, h, c)
 			cfg := e.config()

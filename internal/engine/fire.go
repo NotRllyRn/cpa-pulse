@@ -245,7 +245,7 @@ func (e *Engine) igniteTarget(ctx context.Context, cfg config.Config, t target, 
 			// unchanged. manual=1 without retry_seconds tells the page that
 			// no retry follows.
 			e.addEventDetail("warn", "ignite_failed", t.group.Key, t.group.Label,
-				err.Error(), fmt.Sprintf("%s 手动点火失败：%v", t.group.Label, err),
+				err.Error(), fmt.Sprintf("%s manual ignition failed: %v", t.group.Label, err),
 				map[string]string{"manual": "1", "error": err.Error(), "summary": d.Summary})
 			return err
 		}
@@ -254,10 +254,10 @@ func (e *Engine) igniteTarget(ctx context.Context, cfg config.Config, t target, 
 			// successful manual ignition.
 			ignite.RecordCredentialFailure(ts, now, err, d.Summary)
 			e.dirty = true
-			wait := map[string]string{failure.ReasonAuth: "等待更新凭证", failure.ReasonSuspended: "账号已停用"}[d.Reason]
+			wait := map[string]string{failure.ReasonAuth: "waiting for updated credentials", failure.ReasonSuspended: "account suspended"}[d.Reason]
 			e.addEventDetail("error", "ignite_paused", t.group.Key, t.group.Label,
-				fmt.Sprintf("暂停，%s：%s", wait, d.Summary),
-				fmt.Sprintf("%s 点火失败，暂停，%s：%v", t.group.Label, wait, err),
+				fmt.Sprintf("Paused, %s: %s", wait, d.Summary),
+				fmt.Sprintf("%s ignition failed; paused, %s: %v", t.group.Label, wait, err),
 				map[string]string{"error": err.Error(), "summary": d.Summary, "reason": d.Reason})
 			e.noteCredentialProblem(ctx, t.cred, t.group.Key, d, sourceIgnite, fingerprint)
 			return err
@@ -271,8 +271,8 @@ func (e *Engine) igniteTarget(ctx context.Context, cfg config.Config, t target, 
 				params["reason"] = d.Reason
 			}
 			e.addEventDetail("error", "ignite_paused", t.group.Key, t.group.Label,
-				fmt.Sprintf("暂停到 %s：%s", until, d.Summary),
-				fmt.Sprintf("%s 点火失败，暂停到 %s：%v", t.group.Label, until, err), params)
+				fmt.Sprintf("Paused until %s: %s", until, d.Summary),
+				fmt.Sprintf("%s ignition failed; paused until %s: %v", t.group.Label, until, err), params)
 			if d.Reason == failure.ReasonRateLimited && outcome.NotifyCircuit {
 				e.credentialEvent(t.cred, t.group.Key, d, sourceIgnite, outcome.Until)
 			}
@@ -291,24 +291,24 @@ func (e *Engine) igniteTarget(ctx context.Context, cfg config.Config, t target, 
 				}
 			}
 		} else {
-			retry := retryText(outcome.RetryIn)
+			retry := "Retry in " + retryText(outcome.RetryIn)
 			if outcome.Cooldown {
-				retry = "CPA 冷却结束，" + retry
+				retry = "CPA cooldown; " + strings.ToLower(retry)
 			}
 			params := map[string]string{"retry_seconds": strconv.Itoa(int(outcome.RetryIn.Round(time.Second).Seconds())), "error": err.Error(), "summary": d.Summary}
 			if outcome.Cooldown {
 				params["cooldown"] = "1"
 			}
 			e.addEventDetail("warn", "ignite_failed", t.group.Key, t.group.Label,
-				fmt.Sprintf("%s后重试：%v", retry, err),
-				fmt.Sprintf("%s 点火失败，%s后重试：%v", t.group.Label, retry, err), params)
+				fmt.Sprintf("%s: %v", retry, err),
+				fmt.Sprintf("%s ignition failed; %s: %v", t.group.Label, strings.ToLower(retry), err), params)
 		}
 		return err
 	}
 	ignite.RecordSuccess(ts, model, now)
 	e.dirty = true
 	e.noteCredentialOK(ctx, t.cred, sourceIgnite)
-	resetText := "未知"
+	resetText := "unknown"
 	params := map[string]string{"model": model}
 	if group, ok := e.group(t.group.Key); ok {
 		if w, ok := group.fiveHour(); ok && !w.Reset.IsZero() {
@@ -321,8 +321,8 @@ func (e *Engine) igniteTarget(ctx context.Context, cfg config.Config, t target, 
 		kind = "ignite_manual"
 	}
 	e.addEventDetail("info", kind, t.group.Key, t.group.Label,
-		fmt.Sprintf("%s · 下次重置 %s", model, resetText),
-		fmt.Sprintf("%s 点火成功（%s），下次重置 %s", t.group.Label, model, resetText), params)
+		fmt.Sprintf("%s · next reset %s", model, resetText),
+		fmt.Sprintf("%s ignition succeeded (%s); next reset %s", t.group.Label, model, resetText), params)
 	return nil
 }
 
@@ -416,16 +416,16 @@ func (e *Engine) execute(ctx context.Context, cfg config.Config, t target) (stri
 			// markers that change how the final error is classified.
 			status := ""
 			if code := host.StatusOf(refusedErr); code != 0 {
-				status = fmt.Sprintf("（状态码 %d）", code)
+				status = fmt.Sprintf(" (status %d)", code)
 			}
-			err = fmt.Errorf("%w；此前 %s 被上游拒绝%s", err, refused, status)
+			err = fmt.Errorf("%w; earlier %s was rejected by the provider%s", err, refused, status)
 		}
 		return model, resp, err
 	}
 	if refused != "" {
-		return "", empty, fmt.Errorf("%w（%s 被上游拒绝：%v；最后一次：%v）", ignite.ErrNoModel, refused, refusedErr, lastErr)
+		return "", empty, fmt.Errorf("%w (%s was rejected by the provider: %v; last attempt: %v)", ignite.ErrNoModel, refused, refusedErr, lastErr)
 	}
-	return "", empty, fmt.Errorf("%w（最后一次：%v）", ignite.ErrNoModel, lastErr)
+	return "", empty, fmt.Errorf("%w (last attempt: %v)", ignite.ErrNoModel, lastErr)
 }
 
 // refusedFor is how long a model the provider refused for a quota group is
@@ -443,8 +443,8 @@ func (e *Engine) noteRefused(t target, model, fallback string) {
 	e.refused[t.group.Key+"\x00"+model] = e.now()
 	hours := strconv.Itoa(int(refusedFor / time.Hour))
 	e.addEventDetail("warn", "model_refused", t.group.Key, t.group.Label,
-		fmt.Sprintf("%s 被上游拒绝，改用 %s，%s 小时内不再尝试", model, fallback, hours),
-		fmt.Sprintf("%s 点火模型 %s 被上游拒绝，改用 %s，%s 小时内不再尝试", t.group.Label, model, fallback, hours),
+		fmt.Sprintf("%s was rejected by the provider; using %s and skipping it for %s hours", model, fallback, hours),
+		fmt.Sprintf("%s ignition model %s was rejected by the provider; using %s and skipping it for %s hours", t.group.Label, model, fallback, hours),
 		map[string]string{"model": model, "fallback": fallback, "hours": hours})
 }
 
@@ -567,7 +567,7 @@ func (e *Engine) confirm(ctx context.Context, cfg config.Config, t target, start
 			return nil
 		}
 		if err := e.queryCred(ctx, cfg, t.cred, !manual); err != nil {
-			e.logf("warn", "点火确认时刷新额度失败：%s：%v", t.group.Label, err)
+			e.logf("warn", "Quota refresh failed during ignition confirmation: %s: %v", t.group.Label, err)
 		}
 		if e.confirmed(t.group.Key, start, e.now()) {
 			return nil
@@ -580,7 +580,7 @@ func (e *Engine) confirm(ctx context.Context, cfg config.Config, t target, start
 // otherwise.
 func retryText(d time.Duration) string {
 	if d < time.Minute {
-		return fmt.Sprintf("%d 秒", int(d.Round(time.Second).Seconds()))
+		return fmt.Sprintf("%d s", int(d.Round(time.Second).Seconds()))
 	}
-	return fmt.Sprintf("%d 分钟", int(d.Round(time.Minute).Minutes()))
+	return fmt.Sprintf("%d min", int(d.Round(time.Minute).Minutes()))
 }

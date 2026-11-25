@@ -137,7 +137,7 @@ func (e *Engine) executeStream(ctx context.Context, t target, req pluginapi.Host
 			level = "warn"
 		}
 		defer func() { _ = recover() }()
-		e.host.Log(level, "Lamplighter ignition "+string(raw), fields)
+		e.host.Log(level, "cpa-pulse ignition "+string(raw), fields)
 	}()
 	if ctx.Err() != nil || e.stopping() {
 		reason = "canceled"

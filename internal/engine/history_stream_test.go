@@ -14,7 +14,7 @@ func TestHistoryShortRangeStreamsResetPredecessorAndUnorderedSamples(t *testing.
 	from := c.t.Add(-time.Hour).Unix()
 	reset := c.t.Add(time.Hour).Unix()
 	old := c.t.Add(-40 * 24 * time.Hour).Unix()
-	// 大量范围外记录只保留每个系列的最后一个样本，不进入范围内排序。
+	// Keep only the last sample per series outside the range; exclude older samples from sorting.
 	batch := make([]store.Record, 0, 128)
 	for i := 0; i < 4096; i++ {
 		batch = append(batch, store.Record{Kind: "s", Time: old + int64(4096-i), Group: "g", Window: "five-hour", Reset: reset})
@@ -29,7 +29,7 @@ func TestHistoryShortRangeStreamsResetPredecessorAndUnorderedSamples(t *testing.
 	if err := e.history.Append(
 		store.Record{Kind: "s", Time: from + 20, Group: "g", Window: "five-hour", Remaining: 70, Reset: reset - 1000},
 		store.Record{Kind: "s", Time: from + 10, Group: "g", Window: "five-hour", Remaining: 80, Reset: reset + 10040},
-		// 变化点及其抖动在较新的样本之后补写，仍需按时间判断相邻变化。
+		// Changes and jitter written after newer samples must still be compared in time order.
 		store.Record{Kind: "s", Time: changed, Group: "g", Window: "five-hour", Reset: reset + 10000},
 		store.Record{Kind: "s", Time: changed + 1, Group: "g", Window: "five-hour", Reset: reset + 10030},
 		store.Record{Kind: "s", Time: from - 10, Group: "g", Window: "five-hour", Remaining: 90, Reset: reset + 10035},

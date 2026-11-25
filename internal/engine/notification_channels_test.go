@@ -20,7 +20,7 @@ func channelEngine(t *testing.T, yaml string) *Engine {
 	if err != nil {
 		t.Fatal(err)
 	}
-	c := &clock{t: time.Date(2026, 10, 4, 10, 0, 0, 0, shanghai)}
+	c := &clock{t: time.Date(2026, 10, 4, 10, 0, 0, 0, testZone)}
 	e := New(Options{Host: &fakeHost{}, Version: "test", Now: c.now})
 	e.Configure(cfg, nil)
 	e.applyRuntimeConfig(cfg)

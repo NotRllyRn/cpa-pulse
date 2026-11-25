@@ -71,7 +71,7 @@ func claudeTarget(t *testing.T, e *Engine) target {
 }
 
 func TestSuspendedAccountPausesIgnitionUntilTheCredentialChanges(t *testing.T) {
-	c := &clock{t: time.Date(2026, 11, 16, 7, 0, 0, 0, shanghai)}
+	c := &clock{t: time.Date(2026, 11, 16, 7, 0, 0, 0, testZone)}
 	h := claudeIgnitionHost(c, nil)
 	h.files["3"] = `{"access_token":"t3","refresh_token":"r3"}`
 	fail := true
@@ -97,8 +97,8 @@ func TestSuspendedAccountPausesIgnitionUntilTheCredentialChanges(t *testing.T) {
 		t.Fatalf("want one suspension notification, got %+v", sender.sent)
 	}
 	msg := suspended[0]
-	if msg.Title != "⛔ Claude 账号已停用" || !strings.HasPrefix(msg.Body, "403 · TOS_VIOLATION · 账号已被停用，需要申诉\n") ||
-		!strings.Contains(msg.Body, "申诉：https://forms.gle/hGzM9MEUv2azZsrb9") || strings.Contains(msg.Body, "{") {
+	if msg.Title != "⛔ Claude account suspended" || !strings.HasPrefix(msg.Body, "403 · TOS_VIOLATION · the account was suspended; an appeal is required\n") ||
+		!strings.Contains(msg.Body, "Appeal: https://forms.gle/hGzM9MEUv2azZsrb9") || strings.Contains(msg.Body, "{") {
 		t.Fatalf("message %+v", msg)
 	}
 	invalid := eventsOf(e, "credential_invalid")
@@ -123,7 +123,7 @@ func TestSuspendedAccountPausesIgnitionUntilTheCredentialChanges(t *testing.T) {
 
 	// CPA keeps refreshing the access token, which is no new login.
 	for day := 1; day <= 2; day++ {
-		c.t = time.Date(2026, 11, 16+day, 7, 0, 0, 0, shanghai)
+		c.t = time.Date(2026, 11, 16+day, 7, 0, 0, 0, testZone)
 		h.files["3"] = `{"access_token":"t3-` + c.t.Format("0102") + `","refresh_token":"r3","tos_appeal_url":"x"}`
 		e.poll(ctx, cfg, c.t, "", false)
 		e.performDue(ctx, cfg)
@@ -157,7 +157,7 @@ func TestSuspendedAccountPausesIgnitionUntilTheCredentialChanges(t *testing.T) {
 		t.Fatal(err)
 	}
 	restored := messagesOf(sender, notify.KindCredentialOK)
-	if len(restored) != 1 || restored[0].Title != "✅ Claude 凭证已恢复" || e.credentialBlocked("3") {
+	if len(restored) != 1 || restored[0].Title != "✅ Claude credential works again" || e.credentialBlocked("3") {
 		t.Fatalf("restored %+v", sender.sent)
 	}
 	if ev := eventsOf(e, "credential_restored"); len(ev) != 1 || ev[0].Params["source"] != "ignite" || ev[0].Level != "info" {
@@ -169,7 +169,7 @@ func TestSuspendedAccountPausesIgnitionUntilTheCredentialChanges(t *testing.T) {
 }
 
 func TestRejectedQueryNotifiesOnceAfterItLasts(t *testing.T) {
-	c := &clock{t: time.Date(2026, 11, 16, 7, 0, 0, 0, shanghai)}
+	c := &clock{t: time.Date(2026, 11, 16, 7, 0, 0, 0, testZone)}
 	h := standardHost(c)
 	rejected := true
 	base := h.http
@@ -188,14 +188,14 @@ func TestRejectedQueryNotifiesOnceAfterItLasts(t *testing.T) {
 	// An expired access token is refreshed by CPA within minutes.
 	for i := 0; i < 7; i++ {
 		e.poll(ctx, cfg, c.t, "", true)
-		if len(sender.sent) != 0 && c.t.Before(time.Date(2026, 11, 16, 7, 30, 0, 0, shanghai)) {
+		if len(sender.sent) != 0 && c.t.Before(time.Date(2026, 11, 16, 7, 30, 0, 0, testZone)) {
 			t.Fatalf("notified before the rejection lasted: %+v", sender.sent)
 		}
 		c.add(5 * time.Minute)
 	}
 	credential := messagesOf(sender, notify.KindCredential)
-	if len(sender.sent) != 1 || len(credential) != 1 || credential[0].Title != "🔑 Claude 凭证失效" ||
-		!strings.Contains(credential[0].Body, "来源：额度查询") || !strings.Contains(credential[0].Body, "401") {
+	if len(sender.sent) != 1 || len(credential) != 1 || credential[0].Title != "🔑 Claude credential invalid" ||
+		!strings.Contains(credential[0].Body, "Source: quota query") || !strings.Contains(credential[0].Body, "401") {
 		t.Fatalf("want one credential notification, got %+v", sender.sent)
 	}
 	if ev := eventsOf(e, "credential_invalid"); len(ev) != 1 || ev[0].Params["reason"] != "auth" || ev[0].Params["source"] != "query" {
@@ -214,7 +214,7 @@ func TestRejectedQueryNotifiesOnceAfterItLasts(t *testing.T) {
 	c.add(5 * time.Minute)
 	e2.poll(ctx, cfg, c.t, "", true)
 	restored := messagesOf(sender2, notify.KindCredentialOK)
-	if len(sender2.sent) != 1 || len(restored) != 1 || restored[0].Body != "额度查询恢复正常。" {
+	if len(sender2.sent) != 1 || len(restored) != 1 || restored[0].Body != "Quota queries work again." {
 		t.Fatalf("want one restored notification, got %+v", sender2.sent)
 	}
 	if ev := eventsOf(e2, "credential_restored"); len(ev) != 1 || ev[0].Params["source"] != "query" {
@@ -223,7 +223,7 @@ func TestRejectedQueryNotifiesOnceAfterItLasts(t *testing.T) {
 }
 
 func TestShortQueryRejectionIsNoProblem(t *testing.T) {
-	c := &clock{t: time.Date(2026, 11, 16, 7, 0, 0, 0, shanghai)}
+	c := &clock{t: time.Date(2026, 11, 16, 7, 0, 0, 0, testZone)}
 	h := standardHost(c)
 	calls := 0
 	base := h.http
@@ -250,7 +250,7 @@ func TestShortQueryRejectionIsNoProblem(t *testing.T) {
 }
 
 func TestRateLimitedIgnitionNotifiesWithPauseEnd(t *testing.T) {
-	c := &clock{t: time.Date(2026, 11, 16, 10, 0, 0, 0, shanghai)}
+	c := &clock{t: time.Date(2026, 11, 16, 10, 0, 0, 0, testZone)}
 	h := claudeIgnitionHost(c, nil)
 	h.execute = func(pluginapi.HostModelExecutionRequest) (pluginapi.HostModelExecutionResponse, error) {
 		return pluginapi.HostModelExecutionResponse{}, &host.Error{Code: "host_call_failed", Status: 429,
@@ -265,8 +265,8 @@ func TestRateLimitedIgnitionNotifiesWithPauseEnd(t *testing.T) {
 	e.performDue(ctx, cfg)
 	e.performDue(ctx, cfg)
 	limited := messagesOf(sender, notify.KindRateLimited)
-	if len(h.executed) != 1 || len(sender.sent) != 1 || len(limited) != 1 || limited[0].Title != "⏳ Claude 被限流" ||
-		!strings.Contains(limited[0].Body, "11/17 周二 07:00") || !strings.Contains(limited[0].Body, "Number of requests has exceeded your rate limit.") {
+	if len(h.executed) != 1 || len(sender.sent) != 1 || len(limited) != 1 || limited[0].Title != "⏳ Claude rate limited" ||
+		!strings.Contains(limited[0].Body, "11/17 Tue 07:00") || !strings.Contains(limited[0].Body, "Number of requests has exceeded your rate limit.") {
 		t.Fatalf("rate limit notification %+v", sender.sent)
 	}
 	ev := eventsOf(e, "credential_invalid")
@@ -282,7 +282,7 @@ func TestRateLimitedIgnitionNotifiesWithPauseEnd(t *testing.T) {
 }
 
 func TestCircuitNotificationShowsOneSentence(t *testing.T) {
-	c := &clock{t: time.Date(2026, 11, 16, 10, 0, 0, 0, shanghai)}
+	c := &clock{t: time.Date(2026, 11, 16, 10, 0, 0, 0, testZone)}
 	h := claudeIgnitionHost(c, nil)
 	h.execute = func(pluginapi.HostModelExecutionRequest) (pluginapi.HostModelExecutionResponse, error) {
 		return pluginapi.HostModelExecutionResponse{}, &host.Error{Code: "host_call_failed", Status: 403,
@@ -306,7 +306,7 @@ func TestCircuitNotificationShowsOneSentence(t *testing.T) {
 }
 
 func TestMCPReportsCredentialProblems(t *testing.T) {
-	c := &clock{t: time.Date(2026, 11, 16, 7, 0, 0, 0, shanghai)}
+	c := &clock{t: time.Date(2026, 11, 16, 7, 0, 0, 0, testZone)}
 	e, _ := newTestEngine(t, standardHost(c), c)
 	ctx := context.Background()
 	cfg := e.config()
@@ -358,7 +358,7 @@ func mcpText(t *testing.T, e *Engine, tool string, args map[string]string) strin
 // also for an account whose first query fails and that has no quota group;
 // MCP still reports its event, also after a restart.
 func TestDeactivatedAccountQueryWithoutGroups(t *testing.T) {
-	c := &clock{t: time.Date(2026, 11, 16, 7, 0, 0, 0, shanghai)}
+	c := &clock{t: time.Date(2026, 11, 16, 7, 0, 0, 0, testZone)}
 	h := standardHost(c)
 	base := h.http
 	h.http = func(req pluginapi.HTTPRequest) pluginapi.HTTPResponse {
@@ -375,7 +375,7 @@ func TestDeactivatedAccountQueryWithoutGroups(t *testing.T) {
 	e.Configure(cfg, nil)
 	e.poll(ctx, cfg, c.t, "", true)
 	suspended := messagesOf(sender, notify.KindSuspended)
-	if len(sender.sent) != 1 || len(suspended) != 1 || !strings.HasPrefix(suspended[0].Body, "401 · account_deactivated · ") || !strings.Contains(suspended[0].Body, "来源：额度查询") {
+	if len(sender.sent) != 1 || len(suspended) != 1 || !strings.HasPrefix(suspended[0].Body, "401 · account_deactivated · ") || !strings.Contains(suspended[0].Body, "Source: quota query") {
 		t.Fatalf("want one suspension notification, got %+v", sender.sent)
 	}
 	invalid := eventsOf(e, "credential_invalid")
@@ -416,7 +416,7 @@ func TestDeactivatedAccountQueryWithoutGroups(t *testing.T) {
 // fingerprint. The first readable file, also after a restart, lets ignition
 // try again; the fingerprint is then taken before the request.
 func TestUnknownFingerprintIsSampledAgain(t *testing.T) {
-	c := &clock{t: time.Date(2026, 11, 16, 7, 0, 0, 0, shanghai)}
+	c := &clock{t: time.Date(2026, 11, 16, 7, 0, 0, 0, testZone)}
 	h := claudeIgnitionHost(c, nil)
 	h.files["3"] = `{"access_token":"t3","refresh_token":"r3"}`
 	h.execute = func(pluginapi.HostModelExecutionRequest) (pluginapi.HostModelExecutionResponse, error) {
@@ -436,7 +436,7 @@ func TestUnknownFingerprintIsSampledAgain(t *testing.T) {
 	}
 	e.saveState()
 
-	c.t = time.Date(2026, 11, 17, 7, 0, 0, 0, shanghai)
+	c.t = time.Date(2026, 11, 17, 7, 0, 0, 0, testZone)
 	newLogin := `{"access_token":"t3-new","refresh_token":"r3-new"}`
 	h.files["3"] = newLogin
 	e2, sender2 := newTestEngineIn(t, h, c, dir)
@@ -467,7 +467,7 @@ func TestUnknownFingerprintIsSampledAgain(t *testing.T) {
 // A problem a query found and an ignition confirmed after a new login ends
 // only with a successful ignition, not with the next working query.
 func TestIgnitionConfirmsAQueryProblem(t *testing.T) {
-	c := &clock{t: time.Date(2026, 11, 16, 7, 0, 0, 0, shanghai)}
+	c := &clock{t: time.Date(2026, 11, 16, 7, 0, 0, 0, testZone)}
 	h := claudeIgnitionHost(c, nil)
 	h.files["3"] = `{"access_token":"t3","refresh_token":"r3"}`
 	rejected := false
@@ -513,7 +513,7 @@ func TestManualConfirmationLeavesCredentialState(t *testing.T) {
 	old := confirmDelays
 	confirmDelays = []time.Duration{time.Millisecond}
 	defer func() { confirmDelays = old }()
-	c := &clock{t: time.Date(2026, 11, 16, 7, 0, 0, 0, shanghai)}
+	c := &clock{t: time.Date(2026, 11, 16, 7, 0, 0, 0, testZone)}
 	h := claudeIgnitionHost(c, nil)
 	rejected := false
 	base := h.http
@@ -554,7 +554,7 @@ func TestManualConfirmationLeavesCredentialState(t *testing.T) {
 // A credential problem without a readable message shows its status and code
 // once, without the fixed summary that repeats them.
 func TestCredentialProblemWithoutMessage(t *testing.T) {
-	c := &clock{t: time.Date(2026, 11, 16, 7, 0, 0, 0, shanghai)}
+	c := &clock{t: time.Date(2026, 11, 16, 7, 0, 0, 0, testZone)}
 	e, sender := newTestEngine(t, standardHost(c), c)
 	ctx := context.Background()
 	e.poll(ctx, e.config(), c.t, "", false)
@@ -565,10 +565,10 @@ func TestCredentialProblemWithoutMessage(t *testing.T) {
 	}
 	e.noteCredentialProblem(ctx, e.creds["3"], e.accountGroup("3"), d, sourceQuery, "fp")
 	ev := eventsOf(e, "credential_invalid")
-	if len(ev) != 1 || ev[0].Params["summary"] != "" || ev[0].Detail != "403 · TOS_VIOLATION · 账号已停用" {
+	if len(ev) != 1 || ev[0].Params["summary"] != "" || ev[0].Detail != "403 · TOS_VIOLATION · account suspended" {
 		t.Fatalf("events %+v", ev)
 	}
-	if len(sender.sent) != 1 || strings.Contains(sender.sent[0].Body, "HTTP 403") || !strings.HasPrefix(sender.sent[0].Body, "403 · TOS_VIOLATION · 账号已被停用，需要申诉\n来源：额度查询") {
+	if len(sender.sent) != 1 || strings.Contains(sender.sent[0].Body, "HTTP 403") || !strings.HasPrefix(sender.sent[0].Body, "403 · TOS_VIOLATION · the account was suspended; an appeal is required\nSource: quota query") {
 		t.Fatalf("notification %+v", sender.sent)
 	}
 }
@@ -590,7 +590,7 @@ func (f *failingSender) Send(_ context.Context, msg notify.Message) error {
 // A failed credential notification is tried once per poll: the poll that
 // finds the problem does not retry it at its end, the next polls do.
 func TestFailedCredentialNotificationIsTriedOncePerPoll(t *testing.T) {
-	c := &clock{t: time.Date(2026, 11, 16, 7, 0, 0, 0, shanghai)}
+	c := &clock{t: time.Date(2026, 11, 16, 7, 0, 0, 0, testZone)}
 	h := standardHost(c)
 	base := h.http
 	h.http = func(req pluginapi.HTTPRequest) pluginapi.HTTPResponse {
@@ -628,7 +628,7 @@ func TestFailedCredentialNotificationIsTriedOncePerPoll(t *testing.T) {
 // found by queries, stays ignition-confirmed across a restart: a working
 // query does not end it.
 func TestReasonChangeKeepsIgnitionConfirmation(t *testing.T) {
-	c := &clock{t: time.Date(2026, 11, 16, 7, 0, 0, 0, shanghai)}
+	c := &clock{t: time.Date(2026, 11, 16, 7, 0, 0, 0, testZone)}
 	h := claudeIgnitionHost(c, nil)
 	h.files["3"] = `{"access_token":"t3","refresh_token":"r3"}`
 	h.execute = func(pluginapi.HostModelExecutionRequest) (pluginapi.HostModelExecutionResponse, error) {
@@ -705,7 +705,7 @@ func TestReasonChangeKeepsIgnitionConfirmation(t *testing.T) {
 // not take the file read afterwards for the rejected credential: a login
 // that replaced it while the request was out still gets its ignition.
 func TestLoginDuringTheRequestIsNotBlocked(t *testing.T) {
-	c := &clock{t: time.Date(2026, 11, 16, 7, 0, 0, 0, shanghai)}
+	c := &clock{t: time.Date(2026, 11, 16, 7, 0, 0, 0, testZone)}
 	h := claudeIgnitionHost(c, nil)
 	h.files["3"] = `{"access_token":"t3","refresh_token":"r3"}`
 	newLogin := `{"access_token":"t3-new","refresh_token":"r3-new"}`

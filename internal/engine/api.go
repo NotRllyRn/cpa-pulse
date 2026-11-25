@@ -33,8 +33,8 @@ type Event struct {
 	Label  string `json:"label,omitempty"`
 	Detail string `json:"detail,omitempty"`
 	// Params holds the values of the event, such as the model or the retry
-	// delay, so the page can write the event in its own language. Message
-	// and Detail stay in Chinese for the CPA log and older events.
+	// delay, so the page can format the event. Message and Detail provide
+	// English text for the CPA log and older events.
 	Params map[string]string `json:"params,omitempty"`
 	// Account is the auth index of the account an account event concerns.
 	// It is internal: MCP maps it to the current account label, and Group
@@ -113,7 +113,7 @@ type commandReply struct {
 }
 
 // ErrNotRunning means the background loop has not started yet.
-var ErrNotRunning = errors.New("Lamplighter 尚未就绪：CPA 启动后约 20 秒开始运行，或插件已在配置中停用")
+var ErrNotRunning = errors.New("cpa-pulse is not ready: it starts about 20 seconds after CPA, or the plugin is disabled in the config")
 
 func (e *Engine) send(kind, arg string) error {
 	return e.dispatch(kind, arg).err
@@ -133,7 +133,7 @@ func (e *Engine) dispatch(kind, arg string) commandReply {
 	select {
 	case e.cmdCh <- cmd:
 	case <-timer.C:
-		return commandReply{err: errors.New("后台任务繁忙，请稍后再试")}
+		return commandReply{err: errors.New("Background tasks are busy; try again later")}
 	case <-e.stopCh:
 		return commandReply{err: ErrNotRunning}
 	}
@@ -141,7 +141,7 @@ func (e *Engine) dispatch(kind, arg string) commandReply {
 	case reply := <-cmd.reply:
 		return reply
 	case <-timer.C:
-		return commandReply{err: errors.New("操作超时")}
+		return commandReply{err: errors.New("Operation timed out")}
 	case <-e.stopCh:
 		return commandReply{err: ErrNotRunning}
 	}
@@ -176,7 +176,7 @@ func (e *Engine) TestNotify() ([]ChannelResult, error) {
 func (e *Engine) runCommand(ctx context.Context, cmd command) {
 	defer func() {
 		if r := recover(); r != nil {
-			cmd.reply <- commandReply{err: fmt.Errorf("内部错误：%v", r)}
+			cmd.reply <- commandReply{err: fmt.Errorf("Internal error: %v", r)}
 		}
 	}()
 	cfg := e.config()
@@ -205,17 +205,13 @@ func (e *Engine) runCommand(ctx context.Context, cmd command) {
 	case "test_notify":
 		results, err = e.testNotify(ctx)
 	case "language":
-		lang := notify.NormalizeLang(cmd.arg)
-		e.mu.Lock()
-		e.lang = lang
-		e.mu.Unlock()
-		e.state.Language = lang
+		e.state.Language = notify.LangEN
 		e.dirty = true
 		if e.alerts != nil {
-			e.alerts.Lang = lang
+			e.alerts.Lang = notify.LangEN
 		}
 	default:
-		err = fmt.Errorf("未知操作：%s", cmd.kind)
+		err = fmt.Errorf("Unknown operation: %s", cmd.kind)
 	}
 	e.refreshTargets(cfg)
 	e.saveState()
@@ -257,7 +253,7 @@ func (e *Engine) testNotify(ctx context.Context) ([]ChannelResult, error) {
 			result := ChannelResult{Channel: channel.Name}
 			defer func() {
 				if r := recover(); r != nil {
-					result.OK, result.Error = false, fmt.Sprintf("内部错误：%v", r)
+					result.OK, result.Error = false, fmt.Sprintf("Internal error: %v", r)
 				}
 				tested[i] = result
 			}()
@@ -345,7 +341,7 @@ type Status struct {
 	// newer than Version.
 	LatestVersion string `json:"latest_version,omitempty"`
 	ReleaseURL    string `json:"release_url,omitempty"`
-	// Language is the notification language, "zh" or "en".
+	// Language is always "en"; the field is kept for compatibility.
 	Language string `json:"language"`
 	// Timezone and UTCOffset describe the effective display time zone.
 	Timezone  string          `json:"timezone"`
@@ -407,22 +403,22 @@ func (e *Engine) Status() Status {
 	cfg.MCPKey = ""
 	cfg.AccountOrder = append([]string(nil), cfg.AccountOrder...)
 	if cfg.BarkURL != "" {
-		cfg.BarkURL = "已设置"
+		cfg.BarkURL = "set"
 	}
 	if cfg.ModelsAPIKey != "" {
-		cfg.ModelsAPIKey = "已设置"
+		cfg.ModelsAPIKey = "set"
 	}
 	// The webhook URL, headers and body can hold tokens and topic names.
 	if cfg.Webhook.URL != "" {
-		cfg.Webhook.URL = "已设置"
+		cfg.Webhook.URL = "set"
 	}
 	if cfg.Webhook.Body != "" {
-		cfg.Webhook.Body = "已设置"
+		cfg.Webhook.Body = "set"
 	}
 	if len(cfg.Webhook.Headers) > 0 {
 		headers := make(map[string]string, len(cfg.Webhook.Headers))
 		for name := range cfg.Webhook.Headers {
-			headers[name] = "已设置"
+			headers[name] = "set"
 		}
 		cfg.Webhook.Headers = headers
 	}
@@ -437,7 +433,7 @@ func (e *Engine) Status() Status {
 		NextModels:         maps.Clone(e.nextModels),
 		ListError:          e.pollErrs[""],
 		NotifyError:        e.notifyErr,
-		Language:           notify.NormalizeLang(e.lang),
+		Language:           notify.LangEN,
 		DataDir:            e.dataDir,
 		Timezone:           e.cfg.Location().String(),
 		Now:                e.now().UTC(),
@@ -666,7 +662,7 @@ func (e *Engine) historyContext(ctx context.Context, span time.Duration, kind st
 	var window store.HistoryWindow
 	var err error
 	if bounded {
-		// MCP 保留有限桶用于预测及响应，不构造管理图表的重置事件。
+		// MCP keeps a bounded number of buckets for forecasts and responses, without chart reset events.
 		bucket := max(resp.Bucket, max(1, int64(span.Seconds())/2000))
 		records, err = history.QuerySampled(ctx, resp.From.Add(-historyLead), now, bucket, accept)
 	} else {
@@ -768,7 +764,7 @@ func (e *Engine) historyContext(ctx context.Context, span time.Duration, kind st
 		s.Points = append(s.Points, point)
 		return nil
 	}
-	// 范围前只用最后一个样本初始化重置状态；其时间无需是 x 首次出现的时间。
+	// Initialize reset state from the last sample before the range, regardless of when its reset first appeared.
 	for _, predecessor := range window.Before {
 		if err := visit(predecessor); err != nil {
 			return resp, err
@@ -821,8 +817,8 @@ func (e *Engine) notifyFailed(group string, msg notify.Message, err error) {
 	}
 	params := notifyParams(msg)
 	params["error"] = err.Error()
-	e.addEventDetail("warn", "notify_failed", group, msg.Label, fmt.Sprintf("%s：%v", msg.Title, err),
-		fmt.Sprintf("推送失败 %s：%v", msg.Title, err), params)
+	e.addEventDetail("warn", "notify_failed", group, msg.Label, fmt.Sprintf("%s: %v", msg.Title, err),
+		fmt.Sprintf("Notification failed %s: %v", msg.Title, err), params)
 }
 
 // recordingSender records the notifications it delivers and the ones that
@@ -845,14 +841,10 @@ func (r recordingSender) Send(ctx context.Context, msg notify.Message) error {
 }
 
 // language returns the notification language.
-func (e *Engine) language() string {
-	e.mu.Lock()
-	defer e.mu.Unlock()
-	return notify.NormalizeLang(e.lang)
-}
+func (e *Engine) language() string { return notify.LangEN }
 
-// SetLanguage records the Management Center language reported by the page;
-// notifications use it from then on.
+// SetLanguage keeps the language command compatible with older pages.
+// Every input resolves to English.
 func (e *Engine) SetLanguage(lang string) error { return e.send("language", lang) }
 
 // eventTime formats a time for event params; the page shows it in the

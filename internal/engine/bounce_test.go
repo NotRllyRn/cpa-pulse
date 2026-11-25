@@ -28,7 +28,7 @@ var geminiReadings = []struct {
 }
 
 func TestWeeklyBounceRecordsOneResetAndOneNotification(t *testing.T) {
-	c := &clock{t: time.Unix(geminiReadings[0].at, 0).In(shanghai)}
+	c := &clock{t: time.Unix(geminiReadings[0].at, 0).In(testZone)}
 	e, sender := newTestEngine(t, standardHost(c), c)
 	if _, err := e.loadCreds(e.config()); err != nil {
 		t.Fatal(err)
@@ -37,7 +37,7 @@ func TestWeeklyBounceRecordsOneResetAndOneNotification(t *testing.T) {
 	cred := e.creds["4"]
 	key := "antigravity:4:antigravity:gemini-models"
 	for _, r := range geminiReadings {
-		c.t = time.Unix(r.at, 0).In(shanghai)
+		c.t = time.Unix(r.at, 0).In(testZone)
 		windows := []quota.Window{
 			{ID: "gemini-5h", Label: quota.LabelFiveHour, Remaining: r.fiveHour, Reset: time.Unix(r.fiveHourResetUnix, 0)},
 			{ID: "gemini-weekly", Label: quota.LabelSevenDay, Remaining: r.weekly, Reset: time.Unix(r.weeklyReset, 0)},

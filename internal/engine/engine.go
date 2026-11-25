@@ -1,4 +1,4 @@
-// Package engine runs Lamplighter's background loop: quota polling, passive
+// Package engine runs cpa-pulse's background loop: quota polling, passive
 // quota updates, ignition, notifications and history.
 //
 // One goroutine owns the state and performs all network work in order.
@@ -59,7 +59,7 @@ type Options struct {
 	Now func() time.Time
 }
 
-// Engine is the Lamplighter background service.
+// Engine is the cpa-pulse background service.
 type Engine struct {
 	host           host.Host
 	version        string
@@ -91,7 +91,6 @@ type Engine struct {
 	modelsErr          string
 	// notifyErr is the reason the webhook settings were not applied.
 	notifyErr string
-	lang      string // notification language, a copy of state.Language
 	// nextModels is the model automatic selection picks next, per provider.
 	nextModels map[string]string
 	// latest is the latest release when it is newer than this version.
@@ -184,8 +183,8 @@ func New(opts Options) *Engine {
 	return e
 }
 
-// Configure 接收有效配置并返回实例内接收序号，后台循环负责运行时应用。
-// 解析失败时保留上一份配置、记录状态错误并返回 0。
+// Configure accepts valid config and returns its instance revision; the loop applies runtime settings.
+// A parse error keeps the previous config, records the error and returns 0.
 func (e *Engine) Configure(cfg config.Config, parseErr error) uint64 {
 	e.mu.Lock()
 	if parseErr != nil {
@@ -202,7 +201,7 @@ func (e *Engine) Configure(cfg config.Config, parseErr error) uint64 {
 	return revision
 }
 
-// MCPConfigured 确认该配置已完成监听器配置，包括停用和绑定失败。
+// MCPConfigured confirms listener configuration, including disabling and bind failures.
 func (e *Engine) MCPConfigured(revision uint64) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
@@ -222,8 +221,8 @@ func (e *Engine) confirmRuntimeConfig(revision uint64, token string) {
 }
 
 func (e *Engine) confirmConfigLocked() {
-	// MCP 配置按接收序号串行执行；较新的 MCP 确认也证明较早版本已执行。
-	// 后台循环可跳过未应用的中间配置，只发布它实际确认过的版本。
+	// MCP configuration runs in revision order; a later confirmation covers earlier revisions.
+	// The loop may skip intermediate configs and publishes only revisions it confirmed.
 	if e.runtimeRevision > e.appliedRevision && e.mcpRevision >= e.runtimeRevision {
 		e.appliedRevision = e.runtimeRevision
 		e.configAppliedToken = e.runtimeToken
@@ -312,7 +311,7 @@ func (e *Engine) supervise() {
 		func() {
 			defer func() {
 				if r := recover(); r != nil {
-					e.logf("error", "后台循环异常，将在 30 秒后重启：%v\n%s", r, debug.Stack())
+					e.logf("error", "Background loop panicked; restarting in 30 seconds: %v\n%s", r, debug.Stack())
 				}
 			}()
 			e.run()
@@ -368,9 +367,9 @@ func (e *Engine) checkEnabled() bool {
 	e.mu.Unlock()
 	if changed {
 		if enabled {
-			e.logf("info", "插件已重新启用")
+			e.logf("info", "Plugin enabled again")
 		} else {
-			e.logf("info", "插件已在 CPA 配置中停用，暂停所有后台任务")
+			e.logf("info", "Plugin disabled in CPA config; pausing all background tasks")
 		}
 	}
 	return enabled
@@ -379,18 +378,21 @@ func (e *Engine) checkEnabled() bool {
 func (e *Engine) openStores(cfg config.Config) error {
 	dir := e.resolveDataDir(cfg)
 	if err := os.MkdirAll(dir, 0o755); err != nil {
-		return fmt.Errorf("创建数据目录 %s 失败: %w", dir, err)
+		return fmt.Errorf("Failed to create data directory %s: %w", dir, err)
 	}
 	e.stateFile = &store.StateFile{Path: filepath.Join(dir, "state.json")}
 	state, _, err := e.stateFile.Load()
 	if err != nil {
 		e.logf("warn", "%v", err)
 	}
+	if state.Language != notify.LangEN {
+		state.Language = notify.LangEN
+		e.dirty = true
+	}
 	e.state = state
 	e.history = &store.History{Dir: filepath.Join(dir, "history")}
 	e.mu.Lock()
 	e.dataDir = dir
-	e.lang = notify.NormalizeLang(state.Language)
 	e.credProblems = map[string]string{}
 	for authIndex, st := range state.Credentials {
 		if st != nil && st.Reason != "" {
@@ -428,7 +430,7 @@ func (e *Engine) acquireLock(dir string) bool {
 			return true
 		}
 		e.mu.Lock()
-		e.lockErr = "另一个 Lamplighter 实例仍在运行，等待它退出"
+		e.lockErr = "Another cpa-pulse instance is running; waiting for it to exit"
 		e.mu.Unlock()
 		if !e.sleep(lockRetryPeriod) {
 			return false
@@ -442,7 +444,7 @@ func (e *Engine) saveState() {
 		return
 	}
 	if err := e.stateFile.Save(e.state); err != nil {
-		e.logf("warn", "保存状态失败：%v", err)
+		e.logf("warn", "Failed to save state: %v", err)
 		return
 	}
 	e.dirty = false
@@ -450,7 +452,7 @@ func (e *Engine) saveState() {
 
 func (e *Engine) applyRuntimeConfig(cfg config.Config) {
 	e.egress.Timeout = cfg.RequestTimeout()
-	userAgent := "cpa-plugin-lamplighter/" + e.version
+	userAgent := "cpa-pulse/" + e.version
 	client := &http.Client{Timeout: cfg.RequestTimeout()}
 	fanout := &notify.Fanout{
 		OnChannelError: func(msg notify.Message, err error) { e.notifyFailed("", msg, err) },
@@ -468,8 +470,8 @@ func (e *Engine) applyRuntimeConfig(cfg config.Config) {
 	notifyErr := ""
 	if err != nil {
 		notifyErr = err.Error()
-		fanout.Invalid = fmt.Errorf("Webhook 设置无效：%w", err)
-		e.logf("warn", "Webhook 设置无效，未启用：%v", err)
+		fanout.Invalid = fmt.Errorf("Invalid webhook settings: %w", err)
+		e.logf("warn", "Invalid webhook settings; webhook disabled: %v", err)
 	} else if webhook != nil {
 		webhook.UserAgent = userAgent
 		webhook.Client = client
@@ -489,7 +491,7 @@ func (e *Engine) applyRuntimeConfig(cfg config.Config) {
 	}
 }
 
-// applyPendingConfig 在每轮开始确认接收版本，非运行时字段的变化也需要确认。
+// applyPendingConfig confirms the received revision each round, including changes to non-runtime fields.
 func (e *Engine) applyPendingConfig(applied config.Config) (config.Config, bool) {
 	cfg, revision := e.configSnapshot()
 	if !sameRuntimeConfig(cfg, applied) {
@@ -524,7 +526,7 @@ func (e *Engine) run() {
 	e.mu.Unlock()
 	e.applyRuntimeConfig(cfg)
 	e.confirmRuntimeConfig(revision, cfg.ConfigToken)
-	e.logf("info", "Lamplighter %s 已启动，数据目录 %s", e.version, e.dataDir)
+	e.logf("info", "cpa-pulse %s started; data directory %s", e.version, e.dataDir)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -698,9 +700,9 @@ func (e *Engine) CheckRelease() error {
 // monitoring.
 func (e *Engine) readRelease(ctx context.Context, cfg config.Config) error {
 	e.releaseTried = e.now()
-	latest, err := release.Latest(ctx, &http.Client{Timeout: cfg.RequestTimeout()}, "cpa-plugin-lamplighter/"+e.version)
+	latest, err := release.Latest(ctx, &http.Client{Timeout: cfg.RequestTimeout()}, "cpa-pulse/"+e.version)
 	if err != nil {
-		e.logf("debug", "检查新版本失败：%v", err)
+		e.logf("debug", "Failed to check for updates: %v", err)
 		return err
 	}
 	e.releaseAt = e.now()

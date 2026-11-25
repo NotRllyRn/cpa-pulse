@@ -20,7 +20,7 @@ func TestHistoryResetsPreserveRawChangesAndRangePredecessor(t *testing.T) {
 	for i, at := range times {
 		records = append(records, store.Record{Kind: "s", Time: at, Group: "codex:1:gpt", Window: "five-hour", Remaining: 80 - float64(i), Reset: resets[i]})
 	}
-	// 无重置时间的系列必须输出 []，避免把未知时间当作有效周期。
+	// Series without a reset time must return [] so unknown times are not treated as valid cycles.
 	records = append(records, store.Record{Kind: "s", Time: from.Unix() + 1, Group: "codex:2:gpt", Window: "five-hour", Remaining: 80})
 	if err := e.history.Append(records...); err != nil {
 		t.Fatal(err)
@@ -47,7 +47,7 @@ func TestHistoryResetsPreserveRawChangesAndRangePredecessor(t *testing.T) {
 	if len(got.Points) != 2 || int64(got.Points[1][0]) != times[7] {
 		t.Fatalf("point downsampling changed: %v", got.Points)
 	}
-	// 范围前使用最后一个样本的时间和值，不追溯该 x 首次出现的时间。
+	// Use the last sample before the range, without tracing when its reset first appeared.
 	if got.Resets[0][0] != times[1] {
 		t.Fatal("reset predecessor must use the last pre-range sample")
 	}

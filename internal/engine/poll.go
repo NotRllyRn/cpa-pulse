@@ -40,7 +40,7 @@ type Cred struct {
 	// account.
 	Note string `json:"note,omitempty"`
 	// Suffix tells accounts apart: "#" and the account name, such as
-	// "#主力号", or the masked email of an unnamed account, such as "#rk".
+	// "#résumé", or the masked email of an unnamed account, such as "#rk".
 	Suffix string `json:"suffix,omitempty"`
 }
 
@@ -170,7 +170,7 @@ func (e *Engine) notePassiveFable(cred *Cred, groups []quota.RawGroup) {
 		}
 		e.fableSeen[cred.AuthIndex] = true
 		w := g.Windows[0]
-		e.logf("info", "首次从响应头读到 Fable 额度：%s，剩余 %.1f%%，重置 %s",
+		e.logf("info", "First Fable quota from response headers: %s, %.1f%% remaining, reset %s",
 			labelFor(providers.Title(cred.Provider), cred), w.Remaining, w.Reset.Format(time.RFC3339))
 	}
 }
@@ -321,9 +321,9 @@ func (e *Engine) poll(ctx context.Context, cfg config.Config, slot time.Time, on
 	creds, err := e.loadCreds(cfg)
 	if err != nil {
 		e.mu.Lock()
-		e.pollErrs = map[string]string{"": "读取凭证列表失败：" + err.Error()}
+		e.pollErrs = map[string]string{"": "Failed to read credential list: " + err.Error()}
 		e.mu.Unlock()
-		e.logf("warn", "读取凭证列表失败：%v", err)
+		e.logf("warn", "Failed to read credential list: %v", err)
 		return
 	}
 	errs := map[string]string{}
@@ -340,7 +340,7 @@ func (e *Engine) poll(ctx context.Context, cfg config.Config, slot time.Time, on
 		}
 		if err := e.refreshCred(ctx, cfg, cred); err != nil {
 			errs[cred.AuthIndex] = err.Error()
-			e.logf("warn", "额度刷新失败：%s：%v", labelFor(providers.Title(cred.Provider), cred), err)
+			e.logf("warn", "Quota refresh failed: %s: %v", labelFor(providers.Title(cred.Provider), cred), err)
 		}
 	}
 	e.mu.Lock()
@@ -370,11 +370,11 @@ func (e *Engine) refreshCred(ctx context.Context, cfg config.Config, cred *Cred)
 func (e *Engine) queryCred(ctx context.Context, cfg config.Config, cred *Cred, track bool) error {
 	raw, err := e.host.AuthGet(cred.AuthIndex)
 	if err != nil {
-		return fmt.Errorf("读取凭证文件失败：%w", err)
+		return fmt.Errorf("Failed to read credential file: %w", err)
 	}
 	p := providers.Lookup(cred.Provider)
 	if p == nil {
-		return fmt.Errorf("不支持的额度 provider: %s", cred.Provider)
+		return fmt.Errorf("Unsupported quota provider: %s", cred.Provider)
 	}
 	credential := providers.ParseCredential(raw)
 	credential.Provider, credential.ID, credential.Name = cred.HostProvider, cred.ID, cred.Name
@@ -470,7 +470,7 @@ func (e *Engine) notePlan(ctx context.Context, p *providers.Provider, cred *Cred
 		e.dirty = true
 		plan, err := p.Profile(ctx, e.egress, credential, now)
 		if err != nil {
-			e.logf("debug", "读取套餐失败：%s：%v", labelFor(providers.Title(cred.Provider), cred), err)
+			e.logf("debug", "Failed to read plan: %s: %v", labelFor(providers.Title(cred.Provider), cred), err)
 			if rechecking {
 				// The daily request follows soon when the recheck ends
 				// without a successful read.
@@ -518,7 +518,7 @@ func (e *Engine) planChanged(cred *Cred, state *store.PlanState, from, to string
 		}
 	}
 	label := labelFor(providers.Title(cred.Provider), cred)
-	e.addEventDetail("info", "plan_change", "", label, from+" → "+to, fmt.Sprintf("%s 套餐变化：%s → %s", label, from, to),
+	e.addEventDetail("info", "plan_change", "", label, from+" → "+to, fmt.Sprintf("%s plan changed: %s → %s", label, from, to),
 		map[string]string{"from": from, "to": to})
 	// A change back before the first one was delivered cancels both.
 	if n := state.Notice; n != nil {
@@ -625,7 +625,7 @@ func (e *Engine) applyGroups(ctx context.Context, cfg config.Config, cred *Cred,
 			if e.state != nil {
 				stored := e.state.Group(key)
 				if stored.LegacyUnconfirmed {
-					// 无可靠存在信息的旧组，以首次主动结果重新建立通知基线。
+					// Rebase legacy groups without reliable presence data on their first active result.
 					for _, ws := range stored.Windows {
 						if ws != nil {
 							ws.Rebase = true
@@ -773,7 +773,7 @@ func (e *Engine) recordSamples(group *GroupView, source quota.Source, now time.T
 	}
 	if len(records) > 0 && e.history != nil {
 		if err := e.history.Append(records...); err != nil {
-			e.logf("warn", "写入历史记录失败：%v", err)
+			e.logf("warn", "Failed to write history: %v", err)
 		}
 	}
 }
@@ -805,9 +805,9 @@ func absInt64(v int64) int64 {
 }
 
 func (e *Engine) pollResetFeed(ctx context.Context, cfg config.Config) {
-	records, err := notify.FetchResetRecords(ctx, &http.Client{Timeout: cfg.RequestTimeout()}, "cpa-plugin-lamplighter/"+e.version)
+	records, err := notify.FetchResetRecords(ctx, &http.Client{Timeout: cfg.RequestTimeout()}, "cpa-pulse/"+e.version)
 	if err != nil {
-		e.logf("warn", "Did Codex Reset 检查失败：%v", err)
+		e.logf("warn", "Did Codex Reset check failed: %v", err)
 		return
 	}
 	var sender notify.Sender
@@ -816,10 +816,10 @@ func (e *Engine) pollResetFeed(ctx context.Context, cfg config.Config) {
 	}
 	sent := notify.ProcessResetRecords(ctx, e.state, records, cfg.CodexResetUpdates.NotifyCurrentPending, sender, cfg.Location(), e.language(), e.now())
 	if sent > 0 {
-		e.addEventDetail("info", "codex_reset", "", "Did Codex Reset", fmt.Sprintf("已发送 %d 条通知", sent), fmt.Sprintf("Did Codex Reset：已发送 %d 条通知", sent),
+		e.addEventDetail("info", "codex_reset", "", "Did Codex Reset", fmt.Sprintf("Sent %d notifications", sent), fmt.Sprintf("Did Codex Reset: sent %d notifications", sent),
 			map[string]string{"count": strconv.Itoa(sent)})
 	}
 	e.dirty = true
 }
 
-var errNoTarget = errors.New("找不到该点火目标")
+var errNoTarget = errors.New("Ignition target not found")

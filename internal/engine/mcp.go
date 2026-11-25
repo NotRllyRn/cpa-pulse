@@ -213,9 +213,9 @@ func (b *MCPBackend) notReadyLocked(needPoll bool) map[string]any {
 	polled := !e.lastPoll.IsZero() || e.pollErrs[""] != ""
 	switch {
 	case !e.enabled:
-		return map[string]any{"ready": false, "state": "disabled", "certain": false, "note": "Lamplighter is disabled in the CPA config and reports no quota data."}
+		return map[string]any{"ready": false, "state": "disabled", "certain": false, "note": "cpa-pulse is disabled in the CPA config and reports no quota data."}
 	case !e.running || e.stopped || needPoll && !polled:
-		return map[string]any{"ready": false, "state": "starting", "certain": false, "retry_after_seconds": startupRetrySeconds, "note": "Lamplighter is starting and has not loaded quota data yet; this is not an empty quota list. Retry after retry_after_seconds."}
+		return map[string]any{"ready": false, "state": "starting", "certain": false, "retry_after_seconds": startupRetrySeconds, "note": "cpa-pulse is starting and has not loaded quota data yet; this is not an empty quota list. Retry after retry_after_seconds."}
 	}
 	return nil
 }
@@ -864,9 +864,9 @@ func (e *Engine) recordQuotaTransitions(group *GroupView, previous []WindowView,
 				kind = "exhausted"
 			}
 			if kind != "" {
-				description := "额度重置"
+				description := "quota reset"
 				if kind == "exhausted" {
-					description = "额度耗尽"
+					description = "quota exhausted"
 				}
 				detail := w.ID + " " + description
 				params := map[string]string{"window": w.ID, "remaining": strconv.FormatFloat(w.Remaining, 'f', 2, 64),
