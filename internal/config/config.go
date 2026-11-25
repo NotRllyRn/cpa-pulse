@@ -1,4 +1,4 @@
-// Package config parses the plugins.configs.lamplighter subtree of the CPA config.
+// Package config parses the plugins.configs.cpa-pulse subtree of the CPA config.
 package config
 
 import (
@@ -12,12 +12,12 @@ import (
 	"strings"
 	"time"
 
-	"github.com/PosvdM/cpa-plugin-lamplighter/internal/providers"
+	"github.com/NotRllyRn/cpa-pulse/internal/providers"
 	"gopkg.in/yaml.v3"
 )
 
 // PluginID is the CPA plugin ID and the key under plugins.configs.
-const PluginID = "lamplighter"
+const PluginID = "cpa-pulse"
 
 // DefaultBarkIcon is the cpa-pulse logo.
 const DefaultBarkIcon = "https://raw.githubusercontent.com/NotRllyRn/cpa-pulse/main/assets/logo.png"
@@ -197,7 +197,7 @@ func Default() Config {
 		PassiveSkipSeconds:    60,
 		PassiveSkipMaxMinutes: 30,
 		CPABaseURL:            "http://127.0.0.1:8317",
-		MCPListen:             "127.0.0.1:8318",
+		MCPListen:             "127.0.0.1:8319",
 		Ignition: Ignition{
 			Enabled:                  true,
 			StartHour:                7,
@@ -329,7 +329,7 @@ func (c *Config) normalize() {
 	c.ModelsAPIKey = strings.TrimSpace(c.ModelsAPIKey)
 	c.MCPListen = strings.TrimSpace(c.MCPListen)
 	if c.MCPListen == "" {
-		c.MCPListen = "127.0.0.1:8318"
+		c.MCPListen = "127.0.0.1:8319"
 	}
 	c.MCPKey = strings.TrimSpace(c.MCPKey)
 	c.MCPKeySet = false

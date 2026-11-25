@@ -12,11 +12,11 @@ import (
 	"sync"
 	"time"
 
-	"github.com/PosvdM/cpa-plugin-lamplighter/internal/failure"
-	"github.com/PosvdM/cpa-plugin-lamplighter/internal/notify"
-	"github.com/PosvdM/cpa-plugin-lamplighter/internal/providers"
-	"github.com/PosvdM/cpa-plugin-lamplighter/internal/quota"
-	"github.com/PosvdM/cpa-plugin-lamplighter/internal/store"
+	"github.com/NotRllyRn/cpa-pulse/internal/failure"
+	"github.com/NotRllyRn/cpa-pulse/internal/notify"
+	"github.com/NotRllyRn/cpa-pulse/internal/providers"
+	"github.com/NotRllyRn/cpa-pulse/internal/quota"
+	"github.com/NotRllyRn/cpa-pulse/internal/store"
 )
 
 // MCPBackend exposes a separate, model-safe view of the engine.

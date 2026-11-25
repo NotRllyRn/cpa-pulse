@@ -83,7 +83,7 @@ func TestMCPLifecycleAndEngineProtocol(t *testing.T) {
 	if state := p.status(); !state.MCP.Running || state.ConfigError == "" {
 		t.Fatalf("invalid reconfigure %+v", state.MCP)
 	}
-	request, _ := json.Marshal(pluginapi.ManagementRequest{Method: "GET", Path: "/v0/management/lamplighter/status"})
+	request, _ := json.Marshal(pluginapi.ManagementRequest{Method: "GET", Path: "/v0/management/cpa-pulse/status"})
 	var response pluginapi.ManagementResponse
 	if err := json.Unmarshal(result(t, p.Handle("management.handle", request)), &response); err != nil {
 		t.Fatal(err)

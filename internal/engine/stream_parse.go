@@ -10,8 +10,8 @@ import (
 	"strings"
 	"unicode/utf8"
 
-	"github.com/PosvdM/cpa-plugin-lamplighter/internal/failure"
-	"github.com/PosvdM/cpa-plugin-lamplighter/internal/host"
+	"github.com/NotRllyRn/cpa-pulse/internal/failure"
+	"github.com/NotRllyRn/cpa-pulse/internal/host"
 )
 
 const replyLimit = 4096

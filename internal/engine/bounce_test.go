@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/PosvdM/cpa-plugin-lamplighter/internal/quota"
+	"github.com/NotRllyRn/cpa-pulse/internal/quota"
 )
 
 // geminiReadings are the active queries of the Antigravity Gemini group on

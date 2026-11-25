@@ -17,7 +17,7 @@ func TestMCPAndAccountOrderConfig(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if defaults.MCPEnabled || defaults.MCPListen != "127.0.0.1:8318" || defaults.MCPKey != "" || defaults.MCPKeySet {
+	if defaults.MCPEnabled || defaults.MCPListen != "127.0.0.1:8319" || defaults.MCPKey != "" || defaults.MCPKeySet {
 		t.Fatalf("MCP defaults: %+v", defaults)
 	}
 	cfg, err := Parse([]byte("mcp_enabled: true\nmcp_listen: ' 127.0.0.1:9000 '\nmcp_key: ' secret '\nmcp_key_set: true\naccount_order: [b.json, a.json]\n"))

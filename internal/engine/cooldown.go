@@ -6,10 +6,10 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/PosvdM/cpa-plugin-lamplighter/internal/config"
-	"github.com/PosvdM/cpa-plugin-lamplighter/internal/notify"
-	"github.com/PosvdM/cpa-plugin-lamplighter/internal/providers"
-	"github.com/PosvdM/cpa-plugin-lamplighter/internal/quota"
+	"github.com/NotRllyRn/cpa-pulse/internal/config"
+	"github.com/NotRllyRn/cpa-pulse/internal/notify"
+	"github.com/NotRllyRn/cpa-pulse/internal/providers"
+	"github.com/NotRllyRn/cpa-pulse/internal/quota"
 )
 
 const (

@@ -1,4 +1,4 @@
-module github.com/PosvdM/cpa-plugin-lamplighter
+module github.com/NotRllyRn/cpa-pulse
 
 go 1.26.0
 

@@ -4,8 +4,8 @@ import (
 	"net"
 	"testing"
 
-	"github.com/PosvdM/cpa-plugin-lamplighter/internal/config"
-	"github.com/PosvdM/cpa-plugin-lamplighter/internal/mcp"
+	"github.com/NotRllyRn/cpa-pulse/internal/config"
+	"github.com/NotRllyRn/cpa-pulse/internal/mcp"
 )
 
 func TestMCPBindFailureAndDisableStillAcknowledgeToken(t *testing.T) {

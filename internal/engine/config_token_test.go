@@ -7,9 +7,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/PosvdM/cpa-plugin-lamplighter/internal/config"
-	"github.com/PosvdM/cpa-plugin-lamplighter/internal/mcp"
-	"github.com/PosvdM/cpa-plugin-lamplighter/internal/notify"
+	"github.com/NotRllyRn/cpa-pulse/internal/config"
+	"github.com/NotRllyRn/cpa-pulse/internal/mcp"
+	"github.com/NotRllyRn/cpa-pulse/internal/notify"
 )
 
 func TestConfigAppliedTokenWaitsForRuntimeAndMCP(t *testing.T) {

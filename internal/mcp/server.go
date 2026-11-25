@@ -58,7 +58,7 @@ type Server struct {
 func New(backend Backend, version string) *Server {
 	return &Server{
 		backend: backend, version: version,
-		state:          State{Listen: "127.0.0.1:8318", Path: "/mcp"},
+		state:          State{Listen: "127.0.0.1:8319", Path: "/mcp"},
 		requests:       make(map[context.Context]context.CancelFunc),
 		toolSlots:      make(chan struct{}, 4),
 		queryTimeout:   10 * time.Second,
@@ -383,7 +383,7 @@ func (s *Server) handleMessage(w http.ResponseWriter, r *http.Request, raw []byt
 		if !supported(version) {
 			version = "2025-06-18"
 		}
-		reply(w, req.ID, map[string]any{"protocolVersion": version, "capabilities": map[string]any{"tools": map[string]any{}}, "serverInfo": map[string]string{"name": "lamplighter", "version": s.version}, "instructions": "Quota forecasts are estimates, not guarantees. Check freshness and reset times before scheduling a retry. Model routing candidates are not a routing guarantee."}, nil)
+		reply(w, req.ID, map[string]any{"protocolVersion": version, "capabilities": map[string]any{"tools": map[string]any{}}, "serverInfo": map[string]string{"name": "cpa-pulse", "version": s.version}, "instructions": "Quota forecasts are estimates, not guarantees. Check freshness and reset times before scheduling a retry. Model routing candidates are not a routing guarantee."}, nil)
 	case "ping":
 		reply(w, req.ID, map[string]any{}, nil)
 	case "tools/list":

@@ -8,13 +8,13 @@ import (
 	"strings"
 	"time"
 
-	"github.com/PosvdM/cpa-plugin-lamplighter/internal/config"
-	"github.com/PosvdM/cpa-plugin-lamplighter/internal/failure"
-	"github.com/PosvdM/cpa-plugin-lamplighter/internal/host"
-	"github.com/PosvdM/cpa-plugin-lamplighter/internal/ignite"
-	"github.com/PosvdM/cpa-plugin-lamplighter/internal/notify"
-	"github.com/PosvdM/cpa-plugin-lamplighter/internal/providers"
-	"github.com/PosvdM/cpa-plugin-lamplighter/internal/quota"
+	"github.com/NotRllyRn/cpa-pulse/internal/config"
+	"github.com/NotRllyRn/cpa-pulse/internal/failure"
+	"github.com/NotRllyRn/cpa-pulse/internal/host"
+	"github.com/NotRllyRn/cpa-pulse/internal/ignite"
+	"github.com/NotRllyRn/cpa-pulse/internal/notify"
+	"github.com/NotRllyRn/cpa-pulse/internal/providers"
+	"github.com/NotRllyRn/cpa-pulse/internal/quota"
 	"github.com/router-for-me/CLIProxyAPI/v8/sdk/pluginapi"
 )
 

@@ -17,14 +17,14 @@ import (
 	"sync"
 	"time"
 
-	"github.com/PosvdM/cpa-plugin-lamplighter/internal/config"
-	"github.com/PosvdM/cpa-plugin-lamplighter/internal/egress"
-	"github.com/PosvdM/cpa-plugin-lamplighter/internal/host"
-	"github.com/PosvdM/cpa-plugin-lamplighter/internal/ignite"
-	"github.com/PosvdM/cpa-plugin-lamplighter/internal/models"
-	"github.com/PosvdM/cpa-plugin-lamplighter/internal/notify"
-	"github.com/PosvdM/cpa-plugin-lamplighter/internal/release"
-	"github.com/PosvdM/cpa-plugin-lamplighter/internal/store"
+	"github.com/NotRllyRn/cpa-pulse/internal/config"
+	"github.com/NotRllyRn/cpa-pulse/internal/egress"
+	"github.com/NotRllyRn/cpa-pulse/internal/host"
+	"github.com/NotRllyRn/cpa-pulse/internal/ignite"
+	"github.com/NotRllyRn/cpa-pulse/internal/models"
+	"github.com/NotRllyRn/cpa-pulse/internal/notify"
+	"github.com/NotRllyRn/cpa-pulse/internal/release"
+	"github.com/NotRllyRn/cpa-pulse/internal/store"
 )
 
 const (

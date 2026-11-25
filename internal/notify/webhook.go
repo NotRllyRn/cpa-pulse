@@ -15,7 +15,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/PosvdM/cpa-plugin-lamplighter/internal/config"
+	"github.com/NotRllyRn/cpa-pulse/internal/config"
 )
 
 // Placeholders are the names a webhook may use as {{name}}.
@@ -233,7 +233,7 @@ func (w *Webhook) values(msg Message) map[string]string {
 // defaultBody is the built-in JSON message.
 func defaultBody(values map[string]string) string {
 	raw, _ := json.Marshal(payload{
-		Source: "lamplighter", Kind: values["kind"], Title: values["title"], Body: values["body"], Text: values["text"],
+		Source: "cpa-pulse", Kind: values["kind"], Title: values["title"], Body: values["body"], Text: values["text"],
 		URL: values["url"], Priority: values["priority"], Label: values["label"], Time: values["time"],
 	})
 	return string(raw)

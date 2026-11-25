@@ -219,7 +219,7 @@ func (r RPC) Log(level, message string, fields map[string]any) {
 	if fields == nil {
 		fields = map[string]any{}
 	}
-	fields["plugin"] = "lamplighter"
+	fields["plugin"] = "cpa-pulse"
 	_ = r.call(pluginabi.MethodHostLog, map[string]any{
 		"level":   level,
 		"message": message,

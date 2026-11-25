@@ -12,8 +12,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/PosvdM/cpa-plugin-lamplighter/internal/quota"
-	"github.com/PosvdM/cpa-plugin-lamplighter/internal/store"
+	"github.com/NotRllyRn/cpa-pulse/internal/quota"
+	"github.com/NotRllyRn/cpa-pulse/internal/store"
 )
 
 // DidCodexResetURL lists the latest Did Codex Reset records.

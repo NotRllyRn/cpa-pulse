@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/PosvdM/cpa-plugin-lamplighter/internal/host"
-	"github.com/PosvdM/cpa-plugin-lamplighter/internal/quota"
+	"github.com/NotRllyRn/cpa-pulse/internal/host"
+	"github.com/NotRllyRn/cpa-pulse/internal/quota"
 )
 
 // tosBody is the error CPA passed on when Google disabled an Antigravity

@@ -9,9 +9,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/PosvdM/cpa-plugin-lamplighter/internal/config"
-	"github.com/PosvdM/cpa-plugin-lamplighter/internal/notify"
-	"github.com/PosvdM/cpa-plugin-lamplighter/internal/store"
+	"github.com/NotRllyRn/cpa-pulse/internal/config"
+	"github.com/NotRllyRn/cpa-pulse/internal/notify"
+	"github.com/NotRllyRn/cpa-pulse/internal/store"
 )
 
 func channelEngine(t *testing.T, yaml string) *Engine {

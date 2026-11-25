@@ -10,7 +10,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/PosvdM/cpa-plugin-lamplighter/internal/quota"
+	"github.com/NotRllyRn/cpa-pulse/internal/quota"
 )
 
 // maxErrorBodyLength is how much of an error response is kept for

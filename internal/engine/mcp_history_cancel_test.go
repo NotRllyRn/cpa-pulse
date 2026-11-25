@@ -13,9 +13,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/PosvdM/cpa-plugin-lamplighter/internal/mcp"
-	"github.com/PosvdM/cpa-plugin-lamplighter/internal/quota"
-	"github.com/PosvdM/cpa-plugin-lamplighter/internal/store"
+	"github.com/NotRllyRn/cpa-pulse/internal/mcp"
+	"github.com/NotRllyRn/cpa-pulse/internal/quota"
+	"github.com/NotRllyRn/cpa-pulse/internal/store"
 )
 
 // scanWatchContext signals repeated cancellation checks during a real history scan.

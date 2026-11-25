@@ -8,14 +8,14 @@ import (
 	"testing"
 	"time"
 
-	"github.com/PosvdM/cpa-plugin-lamplighter/internal/config"
-	"github.com/PosvdM/cpa-plugin-lamplighter/internal/mcp"
-	"github.com/PosvdM/cpa-plugin-lamplighter/internal/quota"
+	"github.com/NotRllyRn/cpa-pulse/internal/config"
+	"github.com/NotRllyRn/cpa-pulse/internal/mcp"
+	"github.com/NotRllyRn/cpa-pulse/internal/quota"
 	"gopkg.in/yaml.v3"
 )
 
 // TestWebPreviewFixture exercises management DTOs using real history storage.
-// LAMPLIGHTER_WEB_FIXTURE_DIR optionally exports snapshots for browser tests.
+// CPA_PULSE_WEB_FIXTURE_DIR optionally exports snapshots for browser tests.
 func TestWebPreviewFixture(t *testing.T) {
 	now := time.Now().UTC().Truncate(time.Second)
 	c := &clock{t: now.Add(-6 * time.Hour)}
@@ -95,7 +95,7 @@ func TestWebPreviewFixture(t *testing.T) {
 		snapshots[name] = map[string]any{"raw": saved, "status": status}
 	}
 	capture("default")
-	raw["mcp_enabled"], raw["mcp_key"] = true, "llmcp_preview_fixture"
+	raw["mcp_enabled"], raw["mcp_key"] = true, "cpa_pulse_preview_fixture"
 	capture("enabled")
 	if !listener.State().Running {
 		t.Fatalf("MCP fixture failed to start: %+v", listener.State())
@@ -119,6 +119,15 @@ func TestWebPreviewFixture(t *testing.T) {
 		}
 		histories[kind] = history
 	}
+	declining := false
+	for _, series := range histories["5h"].Series {
+		if len(series.Points) > 1 && series.Points[0][1] > series.Points[len(series.Points)-1][1] {
+			declining = true
+		}
+	}
+	if !declining {
+		t.Fatal("burn-rate preview requires declining quota history")
+	}
 	retired := false
 	for _, series := range histories["5h"].Series {
 		if series.AuthIndex == "2" {
@@ -128,7 +137,7 @@ func TestWebPreviewFixture(t *testing.T) {
 	if !retired {
 		t.Fatal("history must keep the inactive Codex window")
 	}
-	if dir := os.Getenv("LAMPLIGHTER_WEB_FIXTURE_DIR"); dir != "" {
+	if dir := os.Getenv("CPA_PULSE_WEB_FIXTURE_DIR"); dir != "" {
 		if err := os.MkdirAll(dir, 0755); err != nil {
 			t.Fatal(err)
 		}

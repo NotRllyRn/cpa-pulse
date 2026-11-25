@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/PosvdM/cpa-plugin-lamplighter/internal/store"
+	"github.com/NotRllyRn/cpa-pulse/internal/store"
 )
 
 func TestHistoryResetPredecessorOlderThanPointLead(t *testing.T) {

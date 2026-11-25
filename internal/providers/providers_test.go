@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/PosvdM/cpa-plugin-lamplighter/internal/quota"
+	"github.com/NotRllyRn/cpa-pulse/internal/quota"
 )
 
 func decode(t *testing.T, raw string) map[string]any {

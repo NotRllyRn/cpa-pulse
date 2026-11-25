@@ -12,9 +12,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/PosvdM/cpa-plugin-lamplighter/internal/config"
-	"github.com/PosvdM/cpa-plugin-lamplighter/internal/quota"
-	"github.com/PosvdM/cpa-plugin-lamplighter/internal/store"
+	"github.com/NotRllyRn/cpa-pulse/internal/config"
+	"github.com/NotRllyRn/cpa-pulse/internal/quota"
+	"github.com/NotRllyRn/cpa-pulse/internal/store"
 )
 
 // webhookFromYAML builds a webhook the way the plugin does, from the YAML
@@ -104,7 +104,7 @@ func TestWebhookDefaultBodyAndPlainText(t *testing.T) {
 	if err := json.Unmarshal([]byte(got.body), &body); err != nil {
 		t.Fatal(err)
 	}
-	if body["source"] != "lamplighter" || body["kind"] != KindQuota || body["text"] != testMessage.Title+"\n"+testMessage.Body ||
+	if body["source"] != "cpa-pulse" || body["kind"] != KindQuota || body["text"] != testMessage.Title+"\n"+testMessage.Body ||
 		body["time"] != "2026-10-10T16:00:00+08:00" || body["label"] != testMessage.Label {
 		t.Fatalf("default body %v", body)
 	}
@@ -277,7 +277,7 @@ func TestWebhookDefaultBodyOrder(t *testing.T) {
 	if err := w.Send(context.Background(), testMessage); err != nil {
 		t.Fatal(err)
 	}
-	if !strings.HasPrefix(got.body, `{"source":"lamplighter","kind":"quota","title":`) {
+	if !strings.HasPrefix(got.body, `{"source":"cpa-pulse","kind":"quota","title":`) {
 		t.Fatalf("default body order %s", got.body)
 	}
 }

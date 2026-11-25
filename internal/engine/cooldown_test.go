@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/PosvdM/cpa-plugin-lamplighter/internal/quota"
+	"github.com/NotRllyRn/cpa-pulse/internal/quota"
 )
 
 func claudeGroup(now time.Time, fiveHour, sevenDay float64, sevenDayReset time.Time) GroupView {

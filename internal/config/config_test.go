@@ -88,13 +88,24 @@ func TestHostConfigPath(t *testing.T) {
 }
 
 func TestPluginEnabled(t *testing.T) {
-	enabled, err := PluginEnabled([]byte("plugins:\n  enabled: true\n  configs:\n    lamplighter:\n      enabled: true\n"))
+	enabled, err := PluginEnabled([]byte("plugins:\n  enabled: true\n  configs:\n    cpa-pulse:\n      enabled: true\n"))
 	if err != nil || !enabled {
 		t.Fatalf("got %v %v", enabled, err)
 	}
-	enabled, _ = PluginEnabled([]byte("plugins:\n  enabled: true\n  configs:\n    lamplighter:\n      enabled: false\n"))
+	enabled, _ = PluginEnabled([]byte("plugins:\n  enabled: true\n  configs:\n    cpa-pulse:\n      enabled: false\n"))
 	if enabled {
 		t.Fatal("disabled plugin reported as enabled")
+	}
+}
+
+func TestPluginEnabledIgnoresSiblingConfig(t *testing.T) {
+	siblingID := "lamp" + "lighter"
+	for _, pulseConfig := range []string{"", "    cpa-pulse:\n      enabled: false\n"} {
+		raw := "plugins:\n  enabled: true\n  configs:\n    " + siblingID + ":\n      enabled: true\n      data_dir: /sibling/data\n" + pulseConfig
+		enabled, err := PluginEnabled([]byte(raw))
+		if err != nil || enabled {
+			t.Fatalf("sibling config enabled cpa-pulse: %v %v", enabled, err)
+		}
 	}
 }
 
@@ -116,21 +127,21 @@ func TestPluginsDir(t *testing.T) {
 
 func TestDefaultDataDir(t *testing.T) {
 	work := t.TempDir()
-	if got, want := DefaultDataDir(filepath.Join(work, "missing.yaml"), work), filepath.Join(work, "plugins", "data", "lamplighter"); got != want {
+	if got, want := DefaultDataDir(filepath.Join(work, "missing.yaml"), work), filepath.Join(work, "plugins", "data", "cpa-pulse"); got != want {
 		t.Fatalf("missing config: got %q, want %q", got, want)
 	}
 	cfgPath := filepath.Join(work, "config.yaml")
 	if err := os.WriteFile(cfgPath, []byte("plugins:\n  dir: ext\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if got, want := DefaultDataDir(cfgPath, work), filepath.Join(work, "ext", "data", "lamplighter"); got != want {
+	if got, want := DefaultDataDir(cfgPath, work), filepath.Join(work, "ext", "data", "cpa-pulse"); got != want {
 		t.Fatalf("relative: got %q, want %q", got, want)
 	}
 	abs := filepath.Join(t.TempDir(), "plugins")
 	if err := os.WriteFile(cfgPath, []byte("plugins:\n  dir: "+filepath.ToSlash(abs)+"\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if got, want := DefaultDataDir(cfgPath, work), filepath.Join(abs, "data", "lamplighter"); got != want {
+	if got, want := DefaultDataDir(cfgPath, work), filepath.Join(abs, "data", "cpa-pulse"); got != want {
 		t.Fatalf("absolute: got %q, want %q", got, want)
 	}
 }

@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/PosvdM/cpa-plugin-lamplighter/internal/host"
+	"github.com/NotRllyRn/cpa-pulse/internal/host"
 	"github.com/router-for-me/CLIProxyAPI/v8/sdk/pluginapi"
 )
 

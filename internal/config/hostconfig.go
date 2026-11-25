@@ -51,7 +51,7 @@ func PluginsDir(raw []byte) string {
 	return filepath.Clean(dir)
 }
 
-// DefaultDataDir returns <plugins.dir>/data/lamplighter, reading plugins.dir
+// DefaultDataDir returns <plugins.dir>/data/cpa-pulse, reading plugins.dir
 // from the CPA config file. A relative plugins.dir is relative to the CPA
 // working directory. CPA loads plugins from copies in the temp directory, so
 // the path of the loaded library does not point to the plugin directory.

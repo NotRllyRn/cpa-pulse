@@ -12,8 +12,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/PosvdM/cpa-plugin-lamplighter/internal/models"
-	"github.com/PosvdM/cpa-plugin-lamplighter/internal/quota"
+	"github.com/NotRllyRn/cpa-pulse/internal/models"
+	"github.com/NotRllyRn/cpa-pulse/internal/quota"
 	"gopkg.in/yaml.v3"
 )
 

@@ -14,10 +14,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/PosvdM/cpa-plugin-lamplighter/internal/config"
-	"github.com/PosvdM/cpa-plugin-lamplighter/internal/failure"
-	"github.com/PosvdM/cpa-plugin-lamplighter/internal/host"
-	"github.com/PosvdM/cpa-plugin-lamplighter/internal/store"
+	"github.com/NotRllyRn/cpa-pulse/internal/config"
+	"github.com/NotRllyRn/cpa-pulse/internal/failure"
+	"github.com/NotRllyRn/cpa-pulse/internal/host"
+	"github.com/NotRllyRn/cpa-pulse/internal/store"
 )
 
 // Some providers report an unstarted 5-hour window as a rolling placeholder:

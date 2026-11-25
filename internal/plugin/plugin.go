@@ -11,12 +11,12 @@ import (
 	"sync"
 	"time"
 
-	"github.com/PosvdM/cpa-plugin-lamplighter/internal/config"
-	"github.com/PosvdM/cpa-plugin-lamplighter/internal/engine"
-	"github.com/PosvdM/cpa-plugin-lamplighter/internal/host"
-	"github.com/PosvdM/cpa-plugin-lamplighter/internal/mcp"
-	"github.com/PosvdM/cpa-plugin-lamplighter/internal/providers"
-	"github.com/PosvdM/cpa-plugin-lamplighter/internal/web"
+	"github.com/NotRllyRn/cpa-pulse/internal/config"
+	"github.com/NotRllyRn/cpa-pulse/internal/engine"
+	"github.com/NotRllyRn/cpa-pulse/internal/host"
+	"github.com/NotRllyRn/cpa-pulse/internal/mcp"
+	"github.com/NotRllyRn/cpa-pulse/internal/providers"
+	"github.com/NotRllyRn/cpa-pulse/internal/web"
 	"github.com/router-for-me/CLIProxyAPI/v8/sdk/pluginabi"
 	"github.com/router-for-me/CLIProxyAPI/v8/sdk/pluginapi"
 )
@@ -38,8 +38,8 @@ type Plugin struct {
 	stopped     bool
 }
 
-// New creates the plugin. dataDir is the default data directory derived from
-// the plugin file location; hostConfigPath is the CPA config file.
+// New creates the plugin. dataDir defaults to <plugins.dir>/data/cpa-pulse;
+// hostConfigPath is the CPA config file.
 func New(h host.Host, version, dataDir, hostConfigPath string) *Plugin {
 	p := &Plugin{
 		version: version,
@@ -180,7 +180,7 @@ func (p *Plugin) registration() registration {
 				field("bark_group", pluginapi.ConfigFieldTypeString, "Bark notification group"),
 				field("webhook", pluginapi.ConfigFieldTypeObject, "Custom webhook: url, method, headers, body, success_json; empty url disables it"),
 				field("mcp_enabled", pluginapi.ConfigFieldTypeBoolean, "Enable the independent MCP HTTP server"),
-				field("mcp_listen", pluginapi.ConfigFieldTypeString, "MCP listen address, default 127.0.0.1:8318"),
+				field("mcp_listen", pluginapi.ConfigFieldTypeString, "MCP listen address, default 127.0.0.1:8319"),
 				field("mcp_key", pluginapi.ConfigFieldTypeString, "Dedicated MCP Bearer key"),
 				field("models_api_key", pluginapi.ConfigFieldTypeString, "Dedicated CPA API key for reading /v1/models"),
 				field("cpa_base_url", pluginapi.ConfigFieldTypeString, "Address the plugin uses to reach CPA"),
@@ -197,7 +197,7 @@ func (p *Plugin) registration() registration {
 				field("providers", pluginapi.ConfigFieldTypeObject, providersDescription()),
 				field("codex_reset_updates", pluginapi.ConfigFieldTypeObject, "Forward Did Codex Reset signals"),
 				field("history_retention_days", pluginapi.ConfigFieldTypeInteger, "Days of quota history to keep"),
-				field("data_dir", pluginapi.ConfigFieldTypeString, "State and history directory, default plugins/data/lamplighter"),
+				field("data_dir", pluginapi.ConfigFieldTypeString, "State and history directory, default plugins/data/cpa-pulse"),
 			},
 		},
 		Capabilities: map[string]bool{
@@ -255,7 +255,7 @@ func errorResponse(status int, err error) pluginapi.ManagementResponse {
 
 func (p *Plugin) handleManagement(req pluginapi.ManagementRequest) pluginapi.ManagementResponse {
 	path := strings.TrimRight(req.Path, "/")
-	if strings.HasSuffix(path, "/"+config.PluginID+pagePath) && strings.Contains(path, "/v0/resource/plugins/") {
+	if path == "/v0/resource/plugins/"+config.PluginID+pagePath {
 		return pluginapi.ManagementResponse{
 			StatusCode: http.StatusOK,
 			Headers: http.Header{

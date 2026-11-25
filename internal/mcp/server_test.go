@@ -73,6 +73,9 @@ func TestProtocolRoundTrip(t *testing.T) {
 			if status != 200 || !bytes.Contains(raw, []byte(`"protocolVersion":"`+version+`"`)) {
 				t.Fatalf("initialize %d %s", status, raw)
 			}
+			if !bytes.Contains(raw, []byte(`"serverInfo":{"name":"cpa-pulse","version":"0.8.0"}`)) {
+				t.Fatalf("server identity: %s", raw)
+			}
 			t.Logf("initialize: %d version=%s", status, version)
 			status, raw = call("POST", `{"jsonrpc":"2.0","method":"notifications/initialized"}`, "test-key", "")
 			if status != 202 || len(raw) != 0 {
@@ -270,7 +273,7 @@ func TestCloseCancelsAndDrainsActiveRequests(t *testing.T) {
 }
 
 func TestLocalOrigin(t *testing.T) {
-	for _, origin := range []string{"http://localhost", "https://127.0.0.1:99", "http://[::1]:8318"} {
+	for _, origin := range []string{"http://localhost", "https://127.0.0.1:99", "http://[::1]:8319"} {
 		if !localOrigin(origin) {
 			t.Fatal(origin)
 		}

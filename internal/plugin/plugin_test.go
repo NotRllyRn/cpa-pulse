@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/PosvdM/cpa-plugin-lamplighter/internal/host"
+	"github.com/NotRllyRn/cpa-pulse/internal/host"
 	"github.com/router-for-me/CLIProxyAPI/v8/sdk/pluginapi"
 )
 
@@ -75,14 +75,14 @@ func TestManagementRoutesAndPage(t *testing.T) {
 		t.Fatalf("registration %+v", reg)
 	}
 
-	req, _ := json.Marshal(pluginapi.ManagementRequest{Method: "GET", Path: "/v0/resource/plugins/lamplighter/page"})
+	req, _ := json.Marshal(pluginapi.ManagementRequest{Method: "GET", Path: "/v0/resource/plugins/cpa-pulse/page"})
 	var resp pluginapi.ManagementResponse
 	json.Unmarshal(result(t, p.Handle("management.handle", req)), &resp)
 	if resp.StatusCode != 200 || !strings.Contains(string(resp.Body), "<title>cpa-pulse</title>") || strings.Contains(string(resp.Body), "/*JS*/") {
 		t.Fatalf("page response %d", resp.StatusCode)
 	}
 
-	req, _ = json.Marshal(pluginapi.ManagementRequest{Method: "GET", Path: "/v0/management/lamplighter/status"})
+	req, _ = json.Marshal(pluginapi.ManagementRequest{Method: "GET", Path: "/v0/management/cpa-pulse/status"})
 	json.Unmarshal(result(t, p.Handle("management.handle", req)), &resp)
 	var status struct {
 		Version string
@@ -97,7 +97,7 @@ func TestManagementRoutesAndPage(t *testing.T) {
 
 	// The range sets the bucket length, so swapped query parameters would
 	// answer with the 24-hour default and no buckets.
-	req, _ = json.Marshal(pluginapi.ManagementRequest{Method: "GET", Path: "/v0/management/lamplighter/history",
+	req, _ = json.Marshal(pluginapi.ManagementRequest{Method: "GET", Path: "/v0/management/cpa-pulse/history",
 		Query: map[string][]string{"range": {"8d"}, "window": {"7d"}}})
 	json.Unmarshal(result(t, p.Handle("management.handle", req)), &resp)
 	var history struct {
@@ -109,7 +109,7 @@ func TestManagementRoutesAndPage(t *testing.T) {
 	}
 
 	for _, path := range []string{"refresh", "check-update"} {
-		req, _ = json.Marshal(pluginapi.ManagementRequest{Method: "POST", Path: "/v0/management/lamplighter/" + path})
+		req, _ = json.Marshal(pluginapi.ManagementRequest{Method: "POST", Path: "/v0/management/cpa-pulse/" + path})
 		json.Unmarshal(result(t, p.Handle("management.handle", req)), &resp)
 		if resp.StatusCode != 503 {
 			t.Fatalf("%s before the loop starts must answer 503, got %d", path, resp.StatusCode)
@@ -123,11 +123,43 @@ func TestStatusHidesSecrets(t *testing.T) {
 	req, _ := json.Marshal(map[string]any{"config_yaml": []byte("bark_url: https://api.day.app/secret\nmodels_api_key: sk-secret\n" +
 		"webhook:\n  url: https://example.com/hook/secret\n  headers:\n    Authorization: Bearer secret\n  body: '{\"topic\":\"secret\",\"message\":\"{{text}}\"}'\n")})
 	p.Handle("plugin.register", req)
-	req, _ = json.Marshal(pluginapi.ManagementRequest{Method: "GET", Path: "/v0/management/lamplighter/status"})
+	req, _ = json.Marshal(pluginapi.ManagementRequest{Method: "GET", Path: "/v0/management/cpa-pulse/status"})
 	var resp pluginapi.ManagementResponse
 	json.Unmarshal(result(t, p.Handle("management.handle", req)), &resp)
 	if strings.Contains(string(resp.Body), "secret") {
 		t.Fatalf("status leaks secrets: %s", resp.Body)
+	}
+}
+
+func TestManagementRejectsSiblingRoutes(t *testing.T) {
+	p := New(nopHost{}, "1", t.TempDir(), "")
+	defer p.Shutdown()
+	siblingID := "lamp" + "lighter"
+	for _, route := range []struct{ method, path string }{
+		{"GET", "/v0/management/" + siblingID + "/status"},
+		{"GET", "/v0/management/" + siblingID + "/history"},
+		{"POST", "/v0/management/" + siblingID + "/refresh"},
+		{"POST", "/v0/management/" + siblingID + "/ignite"},
+		{"POST", "/v0/management/" + siblingID + "/test-notify"},
+		{"POST", "/v0/management/" + siblingID + "/language"},
+		{"POST", "/v0/management/" + siblingID + "/check-update"},
+		{"GET", "/v0/resource/plugins/" + siblingID + "/page"},
+		{"GET", "/v0/resource/plugins/" + siblingID + "/cpa-pulse/page"},
+		{"GET", "/other/v0/resource/plugins/cpa-pulse/page"},
+	} {
+		t.Run(route.method+" "+route.path, func(t *testing.T) {
+			req, err := json.Marshal(pluginapi.ManagementRequest{Method: route.method, Path: route.path})
+			if err != nil {
+				t.Fatal(err)
+			}
+			var resp pluginapi.ManagementResponse
+			if err := json.Unmarshal(result(t, p.Handle("management.handle", req)), &resp); err != nil {
+				t.Fatal(err)
+			}
+			if resp.StatusCode != 404 {
+				t.Fatalf("sibling route matched: %d", resp.StatusCode)
+			}
+		})
 	}
 }
 

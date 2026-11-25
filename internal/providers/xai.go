@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/PosvdM/cpa-plugin-lamplighter/internal/quota"
+	"github.com/NotRllyRn/cpa-pulse/internal/quota"
 )
 
 // Grok billing endpoint and headers, the same as the CPA Management Center
