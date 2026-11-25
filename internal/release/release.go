@@ -1,4 +1,4 @@
-// Package release reads the latest Lamplighter release from GitHub so the
+// Package release reads the latest cpa-pulse release from GitHub so the
 // management page can point to a newer version.
 package release
 
@@ -14,7 +14,7 @@ import (
 
 // LatestURL is the GitHub API address of the latest published release.
 // Drafts and prereleases are not returned by this endpoint.
-var LatestURL = "https://api.github.com/repos/PosvdM/cpa-plugin-lamplighter/releases/latest"
+var LatestURL = "https://api.github.com/repos/NotRllyRn/cpa-pulse/releases/latest"
 
 // Release is a published release.
 type Release struct {
@@ -46,11 +46,11 @@ func Latest(ctx context.Context, client *http.Client, userAgent string) (Release
 		HTMLURL string `json:"html_url"`
 	}
 	if err := json.Unmarshal(raw, &payload); err != nil {
-		return Release{}, fmt.Errorf("GitHub 返回的 Release 无法解析: %w", err)
+		return Release{}, fmt.Errorf("cannot decode GitHub release: %w", err)
 	}
 	version := strings.TrimPrefix(strings.TrimSpace(payload.TagName), "v")
 	if version == "" || !strings.HasPrefix(payload.HTMLURL, "https://github.com/") {
-		return Release{}, fmt.Errorf("GitHub 返回的 Release 无效: %q", payload.TagName)
+		return Release{}, fmt.Errorf("invalid GitHub release: %q", payload.TagName)
 	}
 	return Release{Version: version, URL: payload.HTMLURL}, nil
 }

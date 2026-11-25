@@ -98,7 +98,7 @@ func TestDiagnoseRateLimitAndCooldown(t *testing.T) {
 }
 
 func TestSummaryOfPlainErrors(t *testing.T) {
-	if got := Summary(errors.New("点火请求已返回，但未确认到新的固定 5h reset")); got != "点火请求已返回，但未确认到新的固定 5h reset" {
+	if got := Summary(errors.New("ignition request for café returned without a confirmed fixed 5-hour reset")); got != "ignition request for café returned without a confirmed fixed 5-hour reset" {
 		t.Fatalf("%q", got)
 	}
 	if got := Summary(&host.Error{Code: "host_call_failed", Message: "{\n  \"error\": {", Status: 500}); got == "" || got == "{" {

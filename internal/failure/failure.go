@@ -312,7 +312,7 @@ var (
 	jsonTail = regexp.MustCompile(`\s*\(HTTP \d{3}\)\s*$`)
 	// sentenceEnd matches the end of a sentence: a full stop before a
 	// capital letter or the end, so that "e.g. check" stays one sentence.
-	sentenceEnd = regexp.MustCompile(`[.!?](?:\s+\p{Lu}|\s*$)|[。！？]`)
+	sentenceEnd = regexp.MustCompile(`[.!?](?:\s+\p{Lu}|\s*$)`)
 )
 
 // summarize returns the first sentence of the provider's message, or of
@@ -325,10 +325,10 @@ func summarize(message, text string) string {
 			message = message[:start]
 		}
 		message = jsonTail.ReplaceAllString(message, "")
-		for _, prefix := range []string{"host_call_failed:", "上游 HTTP"} {
+		for _, prefix := range []string{"host_call_failed:", "upstream HTTP"} {
 			message = strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(message), prefix))
 		}
-		message = strings.TrimRight(message, " :：")
+		message = strings.TrimRight(message, " :")
 		if isStatusOnly(message) {
 			return ""
 		}

@@ -55,7 +55,7 @@ func TestRegisterDeclaresCapabilities(t *testing.T) {
 		Capabilities map[string]bool `json:"capabilities"`
 	}
 	json.Unmarshal(result(t, p.Handle("plugin.register", req)), &reg)
-	if reg.SchemaVersion != 6 || reg.Metadata.Name != "Lamplighter" || reg.Metadata.Version != "1.2.3" {
+	if reg.SchemaVersion != 6 || reg.Metadata.Name != "cpa-pulse" || reg.Metadata.Version != "1.2.3" {
 		t.Fatalf("registration %+v", reg)
 	}
 	if !reg.Capabilities["management_api"] || !reg.Capabilities["usage_plugin"] {
@@ -71,14 +71,14 @@ func TestManagementRoutesAndPage(t *testing.T) {
 		Resources []struct{ Path, Menu string }   `json:"resources"`
 	}
 	json.Unmarshal(result(t, p.Handle("management.register", nil)), &reg)
-	if len(reg.Routes) != 7 || reg.Resources[0].Path != "/page" || reg.Resources[0].Menu != "Lamplighter" {
+	if len(reg.Routes) != 7 || reg.Resources[0].Path != "/page" || reg.Resources[0].Menu != "cpa-pulse" {
 		t.Fatalf("registration %+v", reg)
 	}
 
 	req, _ := json.Marshal(pluginapi.ManagementRequest{Method: "GET", Path: "/v0/resource/plugins/lamplighter/page"})
 	var resp pluginapi.ManagementResponse
 	json.Unmarshal(result(t, p.Handle("management.handle", req)), &resp)
-	if resp.StatusCode != 200 || !strings.Contains(string(resp.Body), "<title>Lamplighter</title>") || strings.Contains(string(resp.Body), "/*JS*/") {
+	if resp.StatusCode != 200 || !strings.Contains(string(resp.Body), "<title>cpa-pulse</title>") || strings.Contains(string(resp.Body), "/*JS*/") {
 		t.Fatalf("page response %d", resp.StatusCode)
 	}
 

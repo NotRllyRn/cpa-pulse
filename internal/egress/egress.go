@@ -74,7 +74,7 @@ func (e *Egress) Do(ctx context.Context, proxyURL string, req quota.Request) (qu
 	httpReq.Header = req.Header.Clone()
 	resp, err := (&http.Client{Transport: transport}).Do(httpReq)
 	if err != nil {
-		return quota.Response{}, fmt.Errorf("经凭证代理请求失败: %w", err)
+		return quota.Response{}, fmt.Errorf("request through credential proxy failed: %w", err)
 	}
 	defer resp.Body.Close()
 	body, err := io.ReadAll(io.LimitReader(resp.Body, maxResponseBytes))
@@ -92,10 +92,10 @@ func (e *Egress) transport(proxyURL string) (*http.Transport, error) {
 	}
 	transport, mode, err := proxyutil.BuildHTTPTransport(proxyURL)
 	if err != nil {
-		return nil, fmt.Errorf("凭证 proxy_url 无效，已跳过请求: %s", proxyutil.Redact(proxyURL))
+		return nil, fmt.Errorf("invalid credential proxy_url; request skipped: %s", proxyutil.Redact(proxyURL))
 	}
 	if transport == nil || mode == proxyutil.ModeInherit {
-		return nil, fmt.Errorf("凭证 proxy_url 无效，已跳过请求: %s", proxyutil.Redact(proxyURL))
+		return nil, fmt.Errorf("invalid credential proxy_url; request skipped: %s", proxyutil.Redact(proxyURL))
 	}
 	if e.transports == nil {
 		e.transports = make(map[string]*http.Transport)

@@ -1,7 +1,7 @@
 // Package ignite decides when to start the next 5-hour quota window and keeps
 // the failure protection state.
 //
-// A 5-hour window starts with the first request after a reset. Lamplighter
+// A 5-hour window starts with the first request after a reset. cpa-pulse
 // sends a minimal request at reset plus a grace period, inside a daily time
 // window, so that the next window starts right away.
 package ignite
@@ -312,10 +312,10 @@ const (
 
 // ErrNotConfirmed means the request returned but no fixed 5-hour reset was
 // observed afterwards.
-var ErrNotConfirmed = errors.New("点火请求已返回，但未确认到新的固定 5h reset")
+var ErrNotConfirmed = errors.New("ignition request returned without a confirmed fixed 5-hour reset")
 
 // ErrNoModel means CPA rejected every candidate model for the credential.
-var ErrNoModel = errors.New("候选点火模型都不能用于该凭证")
+var ErrNoModel = errors.New("no candidate ignition model is available for this credential")
 
 var hardStatuses = map[int]bool{400: true, 401: true, 403: true, 404: true, 409: true, 422: true, 429: true}
 

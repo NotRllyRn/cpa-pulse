@@ -1,4 +1,4 @@
-// Command lamplighter is a CLIProxyAPI native plugin. Build it with
+// Command cpa-pulse is a CLIProxyAPI native plugin. Build it with
 // -buildmode=c-shared; CPA loads the shared library and calls the exported
 // cliproxy_plugin_init function.
 package main

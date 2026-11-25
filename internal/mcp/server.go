@@ -233,7 +233,8 @@ func (s *Server) serveHTTP(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusServiceUnavailable)
 		return
 	}
-	// 请求登记与停止检查共用互斥锁，防止 Close 开始等待后登记新请求。
+	// Register while holding the lock used for the stop check so Close waits
+	// for every admitted request.
 	s.handlers.Add(1)
 	ctx, cancel := context.WithCancel(r.Context())
 	s.requests[ctx] = cancel
@@ -442,7 +443,7 @@ func (s *Server) callTool(ctx context.Context, name string, arguments map[string
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	// 每次工具调用独立占用名额，批处理与其他请求共享服务级并发上限。
+	// Each tool call takes one slot; batches share the server limit with other requests.
 	select {
 	case s.toolSlots <- struct{}{}:
 		defer func() { <-s.toolSlots }()

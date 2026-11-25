@@ -10,20 +10,20 @@ import (
 	"github.com/PosvdM/cpa-plugin-lamplighter/internal/store"
 )
 
-var shanghai = time.FixedZone("UTC+8", 8*3600)
+var testZone = time.FixedZone("UTC+8", 8*3600)
 
 func schedule() Schedule {
-	return Schedule{Cfg: config.Default().Ignition, Loc: shanghai}
+	return Schedule{Cfg: config.Default().Ignition, Loc: testZone}
 }
 
 func local(hour, minute int) time.Time {
-	return time.Date(2026, 10, 4, hour, minute, 0, 0, shanghai)
+	return time.Date(2026, 10, 4, hour, minute, 0, 0, testZone)
 }
 
 func TestWaitsForDailyStart(t *testing.T) {
 	due := schedule().DueAt(&store.TargetState{}, time.Time{}, local(5, 0))
 	if !due.Equal(local(7, 0)) {
-		t.Fatalf("due %v", due.In(shanghai))
+		t.Fatalf("due %v", due.In(testZone))
 	}
 }
 
@@ -31,21 +31,21 @@ func TestUsesResetPlusGrace(t *testing.T) {
 	reset := local(10, 0)
 	due := schedule().DueAt(&store.TargetState{}, reset, local(9, 0))
 	if !due.Equal(reset.Add(3 * time.Second)) {
-		t.Fatalf("due %v", due.In(shanghai))
+		t.Fatalf("due %v", due.In(testZone))
 	}
 }
 
 func TestResetAfterCutoffWaitsForNextDay(t *testing.T) {
 	due := schedule().DueAt(&store.TargetState{}, local(23, 0), local(20, 0))
 	if !due.Equal(local(7, 0).AddDate(0, 0, 1)) {
-		t.Fatalf("due %v", due.In(shanghai))
+		t.Fatalf("due %v", due.In(testZone))
 	}
 }
 
 func TestAfterCutoffWaitsForNextDay(t *testing.T) {
 	due := schedule().DueAt(&store.TargetState{}, time.Time{}, local(22, 31))
 	if !due.Equal(local(7, 0).AddDate(0, 0, 1)) {
-		t.Fatalf("due %v", due.In(shanghai))
+		t.Fatalf("due %v", due.In(testZone))
 	}
 }
 
@@ -53,7 +53,7 @@ func TestExpiredResetIsDueNow(t *testing.T) {
 	now := local(12, 0)
 	due := schedule().DueAt(&store.TargetState{}, local(11, 59), now)
 	if !due.Equal(now) {
-		t.Fatalf("due %v", due.In(shanghai))
+		t.Fatalf("due %v", due.In(testZone))
 	}
 }
 
@@ -68,7 +68,7 @@ func TestRollingResetIsDetectedFromTwoObservations(t *testing.T) {
 		t.Fatal("reset moving with time must be rolling")
 	}
 	if due := schedule().DueAt(ts, second.Add(5*time.Hour), second); !due.Equal(second) {
-		t.Fatalf("rolling window should be due now, got %v", due.In(shanghai))
+		t.Fatalf("rolling window should be due now, got %v", due.In(testZone))
 	}
 }
 

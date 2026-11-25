@@ -104,7 +104,7 @@ func TestToolConcurrencyLimitIncludesBatch(t *testing.T) {
 			t.Fatal("accepted tool did not finish")
 		}
 	}
-	// 批处理按工具调用释放名额，批次长度不占用并发名额。
+	// Batch items release their slots between calls, regardless of batch length.
 	w = recordMCP(s, "["+strings.Join([]string{
 		toolMessage(1, names[0]), toolMessage(2, names[1]), toolMessage(3, names[2]),
 		toolMessage(4, names[3]), toolMessage(5, names[0]),

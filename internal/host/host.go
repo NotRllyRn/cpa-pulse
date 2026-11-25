@@ -1,4 +1,4 @@
-// Package host wraps the CPA host callbacks used by Lamplighter.
+// Package host wraps the CPA host callbacks used by cpa-pulse.
 //
 // The native ABI exchanges JSON envelopes. Package main supplies a Caller that
 // crosses the C boundary; everything above it works with Go values so that the
@@ -49,7 +49,7 @@ func StatusOf(err error) int {
 	return 0
 }
 
-// Host is the set of host callbacks Lamplighter uses.
+// Host is the set of host callbacks cpa-pulse uses.
 type Host interface {
 	AuthList() ([]pluginapi.HostAuthFileEntry, error)
 	AuthGet(authIndex string) (json.RawMessage, error)

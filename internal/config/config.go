@@ -19,11 +19,11 @@ import (
 // PluginID is the CPA plugin ID and the key under plugins.configs.
 const PluginID = "lamplighter"
 
-// DefaultBarkIcon is the Lamplighter logo.
-const DefaultBarkIcon = "https://raw.githubusercontent.com/PosvdM/cpa-plugin-lamplighter/main/assets/logo.png"
+// DefaultBarkIcon is the cpa-pulse logo.
+const DefaultBarkIcon = "https://raw.githubusercontent.com/NotRllyRn/cpa-pulse/main/assets/logo.png"
 
-// oldBarkIcon is the CPA Management Center logo, the default before v0.1.17.
-// Saved configs that still hold it get the new default.
+// oldBarkIcon is the CPA Management Center logo. Saved configs using it
+// receive the default plugin icon.
 const oldBarkIcon = "https://raw.githubusercontent.com/router-for-me/Cli-Proxy-API-Management-Center/main/logo.jpg"
 
 // Provider holds the per-provider monitoring and ignition switches.
@@ -123,7 +123,7 @@ type Config struct {
 	// key is absent.
 	LegacyNotifyRecovery *bool `yaml:"notify_recovery,omitempty" json:"-"`
 	LegacyResetReminders *bool `yaml:"notify_reset_reminders,omitempty" json:"-"`
-	// Timezone is an IANA name such as Asia/Shanghai. When both Timezone and
+	// Timezone is an IANA name such as Europe/Paris. When both Timezone and
 	// TimezoneOffsetHours are empty, the plugin uses the time zone of the CPA
 	// process.
 	Timezone            string   `yaml:"timezone" json:"timezone"`
@@ -345,7 +345,7 @@ func (c *Config) normalize() {
 	c.CriticalThreshold = threshold(c.CriticalThreshold, 10, c.LowThreshold)
 	after := [3]float64{c.NoticeThreshold, c.LowThreshold, c.CriticalThreshold}
 	if before != after {
-		log.Printf("lamplighter: normalized notice/low/critical thresholds from %v to %v", before, after)
+		log.Printf("cpa-pulse: normalized notice/low/critical thresholds from %v to %v", before, after)
 	}
 	c.DataDir = strings.TrimSpace(c.DataDir)
 	c.Timezone = strings.TrimSpace(c.Timezone)

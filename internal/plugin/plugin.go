@@ -22,7 +22,7 @@ import (
 )
 
 const (
-	repository  = "https://github.com/PosvdM/cpa-plugin-lamplighter"
+	repository  = "https://github.com/NotRllyRn/cpa-pulse"
 	apiBase     = "/v0/management/" + config.PluginID
 	pagePath    = "/page"
 	stopTimeout = 10 * time.Second
@@ -170,34 +170,34 @@ func (p *Plugin) registration() registration {
 	return registration{
 		SchemaVersion: pluginabi.SchemaVersion,
 		Metadata: pluginapi.Metadata{
-			Name:             "Lamplighter",
+			Name:             "cpa-pulse",
 			Version:          p.version,
-			Author:           "PosvdM",
+			Author:           "NotRllyRn",
 			GitHubRepository: repository,
 			ConfigFields: []pluginapi.ConfigField{
-				field("config_token", pluginapi.ConfigFieldTypeString, "配置应用确认令牌，可为空 / Configuration acknowledgment token; may be empty"),
-				field("bark_url", pluginapi.ConfigFieldTypeString, "Bark 推送地址，到 device key 为止；为空时不通过 Bark 推送 / Bark push URL up to the device key; empty disables Bark"),
-				field("bark_group", pluginapi.ConfigFieldTypeString, "Bark 通知分组 / Bark notification group"),
-				field("webhook", pluginapi.ConfigFieldTypeObject, "自定义 webhook：url、method、headers、body、success_json；url 为空时不启用 / Custom webhook: url, method, headers, body, success_json; empty url disables it"),
-				field("mcp_enabled", pluginapi.ConfigFieldTypeBoolean, "启用独立 MCP HTTP 服务 / Enable the independent MCP HTTP server"),
-				field("mcp_listen", pluginapi.ConfigFieldTypeString, "MCP 监听地址，默认 127.0.0.1:8318 / MCP listen address, default 127.0.0.1:8318"),
-				field("mcp_key", pluginapi.ConfigFieldTypeString, "MCP 专用 Bearer 密钥 / Dedicated MCP Bearer key"),
-				field("models_api_key", pluginapi.ConfigFieldTypeString, "读取 /v1/models 用的专用 CPA API key / Dedicated CPA API key for reading /v1/models"),
-				field("cpa_base_url", pluginapi.ConfigFieldTypeString, "插件访问 CPA 自身的地址 / Address the plugin uses to reach CPA"),
-				field("notice_threshold", pluginapi.ConfigFieldTypeNumber, "第一档提醒阈值（剩余百分比） / First alert threshold (percent remaining)"),
-				field("low_threshold", pluginapi.ConfigFieldTypeNumber, "第二档提醒阈值（剩余百分比） / Second alert threshold (percent remaining)"),
-				field("critical_threshold", pluginapi.ConfigFieldTypeNumber, "第三档提醒阈值（剩余百分比） / Third alert threshold (percent remaining)"),
-				field("recovery_notify", pluginapi.ConfigFieldTypeObject, "额度恢复时通知，five_hour 和 seven_day 各取 off、all 或 after_exhausted / Recovery notifications, off, all or after_exhausted for five_hour and seven_day"),
-				field("reset_reminder", pluginapi.ConfigFieldTypeObject, "重置前提醒，five_hour 和 seven_day 各取 off、all 或 has_remaining / Reset reminders, off, all or has_remaining for five_hour and seven_day"),
-				field("timezone_offset_hours", pluginapi.ConfigFieldTypeNumber, "显示时间和点火时段使用的 UTC 偏移 / UTC offset for displayed times and ignition hours"),
-				field("poll_interval_seconds", pluginapi.ConfigFieldTypeInteger, "主动查询间隔，对齐到整点 / Active query interval, aligned to the hour"),
-				field("passive_skip_seconds", pluginapi.ConfigFieldTypeInteger, "整点前多少秒内有被动数据时跳过主动查询，0 为不跳过 / Skip the active query when passive data arrived this many seconds before the slot; 0 never skips"),
-				field("passive_skip_max_minutes", pluginapi.ConfigFieldTypeInteger, "同一账号最多连续跳过多少分钟 / Longest run of skipped queries per account, in minutes"),
-				field("ignition", pluginapi.ConfigFieldTypeObject, "点火开关、每日时段和失败保护 / Ignition switch, daily hours and failure protection"),
+				field("config_token", pluginapi.ConfigFieldTypeString, "Configuration acknowledgment token; may be empty"),
+				field("bark_url", pluginapi.ConfigFieldTypeString, "Bark push URL up to the device key; empty disables Bark"),
+				field("bark_group", pluginapi.ConfigFieldTypeString, "Bark notification group"),
+				field("webhook", pluginapi.ConfigFieldTypeObject, "Custom webhook: url, method, headers, body, success_json; empty url disables it"),
+				field("mcp_enabled", pluginapi.ConfigFieldTypeBoolean, "Enable the independent MCP HTTP server"),
+				field("mcp_listen", pluginapi.ConfigFieldTypeString, "MCP listen address, default 127.0.0.1:8318"),
+				field("mcp_key", pluginapi.ConfigFieldTypeString, "Dedicated MCP Bearer key"),
+				field("models_api_key", pluginapi.ConfigFieldTypeString, "Dedicated CPA API key for reading /v1/models"),
+				field("cpa_base_url", pluginapi.ConfigFieldTypeString, "Address the plugin uses to reach CPA"),
+				field("notice_threshold", pluginapi.ConfigFieldTypeNumber, "First alert threshold (percent remaining)"),
+				field("low_threshold", pluginapi.ConfigFieldTypeNumber, "Second alert threshold (percent remaining)"),
+				field("critical_threshold", pluginapi.ConfigFieldTypeNumber, "Third alert threshold (percent remaining)"),
+				field("recovery_notify", pluginapi.ConfigFieldTypeObject, "Recovery notifications, off, all or after_exhausted for five_hour and seven_day"),
+				field("reset_reminder", pluginapi.ConfigFieldTypeObject, "Reset reminders, off, all or has_remaining for five_hour and seven_day"),
+				field("timezone_offset_hours", pluginapi.ConfigFieldTypeNumber, "UTC offset for displayed times and ignition hours"),
+				field("poll_interval_seconds", pluginapi.ConfigFieldTypeInteger, "Active query interval, aligned to the hour"),
+				field("passive_skip_seconds", pluginapi.ConfigFieldTypeInteger, "Skip the active query when passive data arrived this many seconds before the slot; 0 never skips"),
+				field("passive_skip_max_minutes", pluginapi.ConfigFieldTypeInteger, "Longest run of skipped queries per account, in minutes"),
+				field("ignition", pluginapi.ConfigFieldTypeObject, "Ignition switch, daily hours and failure protection"),
 				field("providers", pluginapi.ConfigFieldTypeObject, providersDescription()),
-				field("codex_reset_updates", pluginapi.ConfigFieldTypeObject, "转发 Did Codex Reset 的重置信号 / Forward Did Codex Reset signals"),
-				field("history_retention_days", pluginapi.ConfigFieldTypeInteger, "额度历史保留天数 / Days of quota history to keep"),
-				field("data_dir", pluginapi.ConfigFieldTypeString, "状态和历史目录，默认 plugins/data/lamplighter / State and history directory, default plugins/data/lamplighter"),
+				field("codex_reset_updates", pluginapi.ConfigFieldTypeObject, "Forward Did Codex Reset signals"),
+				field("history_retention_days", pluginapi.ConfigFieldTypeInteger, "Days of quota history to keep"),
+				field("data_dir", pluginapi.ConfigFieldTypeString, "State and history directory, default plugins/data/lamplighter"),
 			},
 		},
 		Capabilities: map[string]bool{
@@ -222,16 +222,16 @@ type resource struct {
 func managementRegistration() map[string]any {
 	return map[string]any{
 		"routes": []route{
-			{Method: http.MethodGet, Path: apiBase + "/status", Description: "Lamplighter status"},
-			{Method: http.MethodGet, Path: apiBase + "/history", Description: "Lamplighter quota history"},
+			{Method: http.MethodGet, Path: apiBase + "/status", Description: "cpa-pulse status"},
+			{Method: http.MethodGet, Path: apiBase + "/history", Description: "cpa-pulse quota history"},
 			{Method: http.MethodPost, Path: apiBase + "/refresh", Description: "Query quota now"},
 			{Method: http.MethodPost, Path: apiBase + "/ignite", Description: "Ignite one quota window now"},
 			{Method: http.MethodPost, Path: apiBase + "/test-notify", Description: "Send a test notification to every channel"},
-			{Method: http.MethodPost, Path: apiBase + "/language", Description: "Set the notification language"},
+			{Method: http.MethodPost, Path: apiBase + "/language", Description: "Use English notifications"},
 			{Method: http.MethodPost, Path: apiBase + "/check-update", Description: "Check for a newer release"},
 		},
 		"resources": []resource{
-			{Path: pagePath, Menu: "Lamplighter", Description: "额度监控、自动点火和额度图表 / Quota monitoring, ignition and quota chart"},
+			{Path: pagePath, Menu: "cpa-pulse", Description: "Quota monitoring, ignition and quota chart"},
 		},
 	}
 }
@@ -286,7 +286,7 @@ func (p *Plugin) handleManagement(req pluginapi.ManagementRequest) pluginapi.Man
 		return actionResponse(p.engine.Refresh(strings.TrimSpace(body.AuthIndex)), p)
 	case "POST " + apiBase + "/ignite":
 		if strings.TrimSpace(body.Target) == "" {
-			return errorResponse(http.StatusBadRequest, errors.New("缺少 target"))
+			return errorResponse(http.StatusBadRequest, errors.New("target is required"))
 		}
 		return actionResponse(p.engine.Ignite(strings.TrimSpace(body.Target)), p)
 	case "POST " + apiBase + "/test-notify":
@@ -300,7 +300,7 @@ func (p *Plugin) handleManagement(req pluginapi.ManagementRequest) pluginapi.Man
 		}
 		return jsonResponse(http.StatusOK, map[string]any{"ok": ok, "results": results, "status": p.status()})
 	case "POST " + apiBase + "/language":
-		return actionResponse(p.engine.SetLanguage(body.Language), p)
+		return actionResponse(p.engine.SetLanguage("en"), p)
 	case "POST " + apiBase + "/check-update":
 		return actionResponse(p.engine.CheckRelease(), p)
 	}
@@ -317,14 +317,12 @@ func actionResponse(err error, p *Plugin) pluginapi.ManagementResponse {
 	return jsonResponse(http.StatusOK, map[string]any{"ok": true, "status": p.status()})
 }
 
-// providersDescription describes the providers key with the provider IDs,
-// such as "codex、claude 的监控和点火设置 / Monitoring and ignition settings
-// for codex and claude".
+// providersDescription describes monitoring and ignition settings for each provider ID.
 func providersDescription() string {
 	ids := providers.IDs()
 	english := strings.Join(ids, ", ")
 	if n := len(ids); n > 1 {
 		english = strings.Join(ids[:n-1], ", ") + " and " + ids[n-1]
 	}
-	return strings.Join(ids, "、") + " 的监控和点火设置 / Monitoring and ignition settings for " + english
+	return "Monitoring and ignition settings for " + english
 }
