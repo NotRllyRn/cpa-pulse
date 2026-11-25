@@ -15,6 +15,7 @@ import (
 	"github.com/NotRllyRn/cpa-pulse/internal/engine"
 	"github.com/NotRllyRn/cpa-pulse/internal/host"
 	"github.com/NotRllyRn/cpa-pulse/internal/mcp"
+	"github.com/NotRllyRn/cpa-pulse/internal/pricing"
 	"github.com/NotRllyRn/cpa-pulse/internal/providers"
 	"github.com/NotRllyRn/cpa-pulse/internal/web"
 	"github.com/router-for-me/CLIProxyAPI/v8/sdk/pluginabi"
@@ -182,6 +183,8 @@ func (p *Plugin) registration() registration {
 				field("mcp_enabled", pluginapi.ConfigFieldTypeBoolean, "Enable the independent MCP HTTP server"),
 				field("mcp_listen", pluginapi.ConfigFieldTypeString, "MCP listen address, default 127.0.0.1:8319"),
 				field("mcp_key", pluginapi.ConfigFieldTypeString, "Dedicated MCP Bearer key"),
+				field("pricing", pluginapi.ConfigFieldTypeObject, "Price refresh interval in hours; 0 disables automatic refresh"),
+				field("account_models", pluginapi.ConfigFieldTypeObject, "Manual model by auth ID and quota group key"),
 				field("models_api_key", pluginapi.ConfigFieldTypeString, "Dedicated CPA API key for reading /v1/models"),
 				field("cpa_base_url", pluginapi.ConfigFieldTypeString, "Address the plugin uses to reach CPA"),
 				field("notice_threshold", pluginapi.ConfigFieldTypeNumber, "First alert threshold (percent remaining)"),
@@ -223,6 +226,10 @@ func managementRegistration() map[string]any {
 	return map[string]any{
 		"routes": []route{
 			{Method: http.MethodGet, Path: apiBase + "/status", Description: "cpa-pulse status"},
+			{Method: http.MethodGet, Path: apiBase + "/prices", Description: "Local model prices"},
+			{Method: http.MethodPost, Path: apiBase + "/prices/refresh", Description: "Refresh model prices"},
+			{Method: http.MethodPut, Path: apiBase + "/prices/override", Description: "Set a model price or disable a model"},
+			{Method: http.MethodDelete, Path: apiBase + "/prices/override", Description: "Reset a model price override"},
 			{Method: http.MethodGet, Path: apiBase + "/history", Description: "cpa-pulse quota history"},
 			{Method: http.MethodPost, Path: apiBase + "/refresh", Description: "Query quota now"},
 			{Method: http.MethodPost, Path: apiBase + "/ignite", Description: "Ignite one quota window now"},
@@ -274,6 +281,49 @@ func (p *Plugin) handleManagement(req pluginapi.ManagementRequest) pluginapi.Man
 		_ = json.Unmarshal(req.Body, &body)
 	}
 	switch strings.ToUpper(req.Method) + " " + path {
+	case "GET " + apiBase + "/prices":
+		return jsonResponse(http.StatusOK, p.engine.Prices())
+	case "POST " + apiBase + "/prices/refresh":
+		p.engine.RefreshPrices()
+		return jsonResponse(http.StatusAccepted, map[string]bool{"ok": true, "refreshing": true})
+	case "PUT " + apiBase + "/prices/override", "DELETE " + apiBase + "/prices/override":
+		var ov struct {
+			Provider string   `json:"provider"`
+			Model    string   `json:"model"`
+			Input    *float64 `json:"input_usd_per_million"`
+			Output   *float64 `json:"output_usd_per_million"`
+			Disabled bool     `json:"disabled"`
+		}
+		if len(req.Body) > 0 {
+			if err := json.Unmarshal(req.Body, &ov); err != nil {
+				return errorResponse(http.StatusBadRequest, errors.New("invalid price override JSON"))
+			}
+		}
+		var err error
+		if strings.EqualFold(req.Method, http.MethodDelete) {
+			if value := req.Query.Get("provider"); value != "" {
+				ov.Provider = value
+			}
+			if value := req.Query.Get("model"); value != "" {
+				ov.Model = value
+			}
+			err = p.engine.DeletePriceOverride(ov.Provider, ov.Model)
+		} else {
+			override := pricing.Override{Disabled: ov.Disabled}
+			if ov.Input != nil || ov.Output != nil {
+				if ov.Input == nil || ov.Output == nil {
+					return errorResponse(http.StatusBadRequest, errors.New("input and output prices are both required"))
+				}
+				override.Price = &pricing.Price{InputUSDPerMillion: *ov.Input, OutputUSDPerMillion: *ov.Output}
+			} else if !ov.Disabled {
+				return errorResponse(http.StatusBadRequest, errors.New("prices or disabled=true are required"))
+			}
+			err = p.engine.SetPriceOverride(ov.Provider, ov.Model, override)
+		}
+		if err != nil {
+			return errorResponse(http.StatusBadRequest, err)
+		}
+		return jsonResponse(http.StatusOK, p.engine.Prices())
 	case "GET " + apiBase + "/status":
 		return jsonResponse(http.StatusOK, p.status())
 	case "GET " + apiBase + "/history":

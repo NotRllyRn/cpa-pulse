@@ -17,8 +17,8 @@ import (
 const replyLimit = 4096
 const streamFrameLimit = 1 << 20
 
-// Only protocol identifiers in this allowlist may reach persisted errors.
-// Never classify or retain free-form provider messages: they can contain secrets.
+// Persist only protocol identifiers and recognized error categories.
+// Raw provider messages can contain secrets and are discarded.
 var streamErrorCodes = map[string]int{
 	"rate_limit_error": 429, "rate_limit_exceeded": 429, "insufficient_quota": 429, "quota_exceeded": 429,
 	"usage_limit_reached":  429,
@@ -27,6 +27,7 @@ var streamErrorCodes = map[string]int{
 	"not_found_error": 404, "not_found": 404, "model_not_found": 404,
 	"invalid_request_error": 400, "invalid_request": 400, "invalid_model": 400,
 	"unsupported_model": 400, "model_not_supported": 400,
+	"model_access_denied": 403, "model_entitlement": 403,
 	"overloaded_error": 529, "server_error": 500, "api_error": 500, "internal_server_error": 500,
 	"auth_not_found": 0, "auth_unavailable": 0,
 }
@@ -149,6 +150,9 @@ func streamError(v map[string]any) error {
 		if _, ok := streamErrorCodes[value]; ok {
 			identifiers = append(identifiers, value)
 		}
+	}
+	if status == 403 && modelAccessMessage(strings.ToLower(str(detail["message"]))) {
+		identifiers = append(identifiers, "model_access_denied")
 	}
 	code := "provider_stream_error"
 	if len(identifiers) > 0 {

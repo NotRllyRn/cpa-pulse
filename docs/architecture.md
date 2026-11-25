@@ -18,6 +18,7 @@ cpa-pulse is a Go native plugin built with `-buildmode=c-shared`. CPA loads the 
 | `internal/quota` | Quota windows, request types, window classification and time parsing |
 | `internal/egress` | Network exit selection |
 | `internal/models` | CPA model list and candidate ordering |
+| `internal/pricing` | models.dev v1 adapter, local catalog/overrides, offline fallback and micro-pulse cost ranking |
 | `internal/ignite` | Scheduling, sliding-reset detection, error classification and failure protection |
 | `internal/failure` | Credential, suspension and rate-limit diagnoses and short error summaries |
 | `internal/notify` | Bark, webhook, quota alerts and Did Codex Reset forwarding |
@@ -31,7 +32,7 @@ cpa-pulse is a Go native plugin built with `-buildmode=c-shared`. CPA loads the 
 
 | Method and path | Purpose |
 | --- | --- |
-| `GET /v0/management/cpa-pulse/status` | Account, quota, schedule and redacted configuration snapshots; `providers` lists IDs, titles, ignition capability, model hints and selectable groups; `group_order` sets quota-group order; windows include `kind` for `5h` and `7d` |
+| `GET /v0/management/cpa-pulse/status` | Account, quota, schedule and redacted configuration snapshots; `providers` lists IDs, titles, ignition capability, model hints and selectable groups; `group_order` sets quota-group order; windows include `kind` for `5h`, `7d` and `30d`; targets expose per-window schedules |
 | `GET /v0/management/cpa-pulse/history` | History and ignition events; accepts `range` and `window`, described below |
 | `POST /v0/management/cpa-pulse/refresh` | Active refresh; `{"auth_index":"..."}` selects one account |
 | `POST /v0/management/cpa-pulse/ignite` | Manual ignition; `{"target":"<quota-group key>"}` |
@@ -41,7 +42,22 @@ cpa-pulse is a Go native plugin built with `-buildmode=c-shared`. CPA loads the 
 
 The page resource is `GET /v0/resource/plugins/cpa-pulse/page`, with the menu title `cpa-pulse`. The resource is public, but its data requests carry the management key. The page reads `cli-proxy-auth` from Management Center local storage: `enc::v2::` uses reversible XOR based on `location.host`, `enc::v1::` also uses User-Agent, and unprefixed values are plain JSON. If no key is found, the page asks for one and keeps it in session storage under `cpa-pulse-management-key`.
 
-History accepts `range=1h|3h|6h|12h|24h|26h|4d|8d|15d|1mo|36d`, default `24h`. `window=5h|7d` filters series; an omitted or unrecognized value returns all windows. Ignition events are not window-filtered. The chart's one-day option also uses `24h`. A month starts on the same date in the previous month in the plugin time zone, clamped to that month's last day. Each series can include its last sample before the range, up to one day earlier (`historyLead`), so the page can clip the line at the left edge. A series without in-range samples is omitted. See [Storage](#storage) for downsampling and reset records.
+History accepts `range=1h|3h|6h|12h|24h|26h|4d|8d|15d|1mo|36d|31d|61d|90d|151d`, default `24h` (`31d` when `window=30d` and range is omitted). `window=5h|7d|30d` filters series; an omitted or unrecognized value returns all windows. Ignition events are not window-filtered. The chart's one-day option also uses `24h`. A month starts on the same date in the previous month in the plugin time zone, clamped to that month's last day. Each series can include its last sample before the range, up to one day earlier (`historyLead`), so the page can clip the line at the left edge. A series without in-range samples is omitted. See [Storage](#storage) for downsampling and reset records.
+
+For example, `GET /v0/management/cpa-pulse/history?window=30d&range=31d` returns 30-day history. Its chart range choices are `24h`, `15d`, `31d`, `61d`, `90d` and `151d`; retention still limits available samples.
+
+### Model prices API
+
+All paths below use `/v0/management/cpa-pulse` and require the CPA management key.
+
+| Method and path | Purpose |
+| --- | --- |
+| `GET /prices` | Local effective catalog, source, fetch/check times, refresh state/error, CPA availability, eligibility and estimated pulse cost; performs no network fetch |
+| `POST /prices/refresh` | Start a shared background fetch; returns HTTP 202 with `refreshing: true`; poll `GET /prices` for completion |
+| `PUT /prices/override` | Set custom prices or a removal tombstone |
+| `DELETE /prices/override` | Delete a local override and restore the source catalog entry |
+
+PUT takes `provider`, `model`, optional `disabled`, and both `input_usd_per_million` and `output_usd_per_million`. Prices must be finite and nonnegative; zero is valid. `disabled: true` may omit prices and creates a tombstone that survives refresh. DELETE takes `provider` and `model` in query parameters or JSON; query parameters take precedence. PUT and DELETE return the effective prices snapshot. Resetting an override-only model removes its entry. Provider aliases and known model aliases share canonical overrides.
 
 ### Configuration saves
 
@@ -63,7 +79,7 @@ Names use CPA's `PATCH /v0/management/auth-files/fields` to replace the first li
 
 Account rows reuse DOM by credential filename to preserve focus and drafts through refresh and reordering. Save results are keyed independently from DOM bindings; rebuilding a row restores its drafts, failures and pending count. Drag handles use Pointer Events, a fixed-position clone, midpoint hit testing and 180 ms FLIP movement. Dropping saves `account_order`; Esc or `pointercancel` restores the original order. Rendering waits until dragging finishes, and reduced-motion preferences suppress animation.
 
-The page stores its view in `cpa-pulse-view`, blur state in `cpa-pulse-mask-accounts`, optional MCP public URL in `cpa-pulse-mcp-url`, chart filters in `cpa-pulse-chart-filters` and expanded groups in `cpa-pulse-chart-expanded`. Filters keep a range per window; expanded group IDs use `provider|source_label` and one shared set for both windows. Updates reread the stored list before changing one group to preserve other tabs' edits. Disabling a remember switch removes its stored choices; enabling merges the current selection. Restoration happens after configuration loads and before the first history request.
+The page stores its view in `cpa-pulse-view`, blur state in `cpa-pulse-mask-accounts`, optional MCP public URL in `cpa-pulse-mcp-url`, chart filters in `cpa-pulse-chart-filters` and expanded groups in `cpa-pulse-chart-expanded`. Filters keep a range per window; expanded group IDs use `provider|source_label` and one shared set for all window kinds. Updates reread the stored list before changing one group to preserve other tabs' edits. Disabling a remember switch removes its stored choices; enabling merges the current selection. Restoration happens after configuration loads and before the first history request.
 
 Blur state is applied to the root before first render. HTML account identifiers use `.account-sensitive` and CSS blur; SVG text uses a filter. Sensitive values include current identifiers, retained event/history labels and internal group IDs of orphan history. Orphan rows are blurred across overview, detail, table and screenshots and use account numbers for accessibility labels. Error summaries and raw errors are blurred whole. Legacy warning/error details without structured parameters are also blurred whole because account names may no longer be known. Sensitive hover text is omitted while blurred. Confirmation dialogs retain original text; raw DOM and API data remain available.
 
@@ -100,11 +116,11 @@ The user-facing chart behavior and available ranges are in [Usage](usage.md#mana
 - A rise of at least five percentage points (`RESET_JUMP`) breaks the curve into cycles; rises separated by one sample count as one reset. Smaller rises in totals do not break the total curve. Overview colors use the cumulative cycle minimum to avoid threshold flicker from rounding.
 - Detail curves fit each cycle to a nonincreasing sequence by pooled adjacent violators, then use Fritsch-Carlson monotone cubic interpolation. Tooltips retain raw samples. Steps of at most two points connect as a decline; larger declines follow a flat interval before bending down.
 
-`rowPace` uses the history API's `resets`, with fixed length `L` of five hours or seven days and value `100 × (reset − time) / L`. Each reset record applies from the later of its observation or cycle start until the next record or its reset. Unknown reset `0` draws no reference. An early reset truncates the old reference. Current state adds a record at history response `to` when the reset differs by more than 60 seconds or becomes unknown. Unknown transitions exclude that boundary from the old segment, so headers and totals show no reference at that instant. Absent current windows pass `null` and add no record. Totals require a reference for every current account.
+`rowPace` uses the history API's `resets`, with fixed length `L` of five hours, seven days or thirty days and value `100 × (reset − time) / L`. Each reset record applies from the later of its observation or cycle start until the next record or its reset. Unknown reset `0` draws no reference. An early reset truncates the old reference. Current state adds a record at history response `to` when the reset differs by more than 60 seconds or becomes unknown. Unknown transitions exclude that boundary from the old segment, so headers and totals show no reference at that instant. Absent current windows pass `null` and add no record. Totals require a reference for every current account.
 
 `paceExtensions` extends a changed reference backward to the last five-point rise after `reset − L − 60 seconds`; unchanged resets within `RESET_DRIFT=60` do not extend. Extensions use a dash-dot line and affect only the plotted weighted reference and hover explanation, not current headers or MCP. Detail headings show remaining, reference, difference and reset countdown; green/red indicates above/below pace. For axes ending now, end labels are spaced by `LABEL_H`. `placeDetailHead` places headings in the left margin when the plot is at least 640 px wide with `labelW ≥ 190`, reserving `SIDE_GAP=46` for ticks; otherwise headings stay above.
 
-Five-hour projection uses `currentRate`: cycle cumulative minima, bottom-up least-squares segment merging within `QUANTUM=2` percentage points, then the last segment's slope (`recentSlope`). Passive samples extend to now only after `HOLD_AFTER=2 minutes`; active samples after 1.5 sampling intervals. Before then, the curve and projection begin/end at the sample time. Seven-day projection uses `cycleRate`: consumed quota divided by elapsed time since the current reset minus seven days, including idle time. Unknown/expired resets, future starts or samples before cycle start suppress it. Totals weight valid account rates. A nondeclining rate draws horizontally. Projections stop at exhaustion or reset and label the endpoint.
+Five-hour projection uses `currentRate`: cycle cumulative minima, bottom-up least-squares segment merging within `QUANTUM=2` percentage points, then the last segment's slope (`recentSlope`). Passive samples extend to now only after `HOLD_AFTER=2 minutes`; active samples after 1.5 sampling intervals. Before then, the curve and projection begin/end at the sample time. Seven-day and thirty-day projections use `cycleRate`: consumed quota divided by elapsed time since the current reset minus the window length, including idle time. Unknown/expired resets, future starts or samples before cycle start suppress it. Totals weight valid account rates. A nondeclining rate draws horizontally. Projections stop at exhaustion or reset and label the endpoint.
 
 The seven-day cycle average reduces sensitivity to concentrated evening use. Upstream's replay over two seven-day cycles measured mean remaining-quota error of 9.9 points for the cycle average, versus 20.0 for the latest slope and 13.5/12.3 for 24/48-hour lookbacks. Across 69 five-hour cycles, forecasts did not beat assuming no further use, so that projection represents current pace only. No replay cycle exhausted quota; exhaustion-time accuracy is unverified.
 
@@ -152,7 +168,7 @@ Providers register in `internal/providers/provider.go` in display order: GPT (`c
 
 `Lookup` ignores case and treats underscores as hyphens. Kimi aliases include `kimi-ai`, `kimi.ai` and `kimi.com`; Grok aliases include `x-ai`, `x.ai` and `grok`. `Cred.Provider` stores the canonical ID and `Cred.HostProvider` the host spelling. Canonical configuration keys override aliases regardless of file order.
 
-`Window.Period` comes from provider duration fields. `quota.Kind` classifies periods within 5% of five hours or seven days, falling back to IDs/labels when period is unknown. Standard IDs are `five-hour` and `seven-day`; other periods use their own IDs and `PeriodLabel`, such as `30d`. Grok's variable monthly period keeps `credits` as a stable ID. Ignition, cooldowns, charts and notifications use window kinds.
+`Window.Period` comes from provider duration fields. `quota.Kind` classifies periods within 5% of five hours or seven days, or from 27 through 32 days as `30d`, falling back to IDs/labels when period is unknown. `quota.Period` preserves a positive provider duration, including variable month lengths. IDs include `five-hour`, `seven-day` and `window-30d`; other provider windows keep their IDs and use `PeriodLabel`, such as `30d`. Grok's variable monthly period keeps `credits` as a stable ID. Ignition, cooldowns, charts and notifications use window kinds.
 
 Adding a provider requires Fetch matching the Management Center quota request, Period values, Headers if available, Ignition if supported, registry entry and matching service colors in `page.css`. Update the service table, configuration defaults and active/passive/request/model sections in these docs. Add a group to `groupOrder` only when it needs a fixed position.
 
@@ -215,7 +231,7 @@ Claude/Antigravity profiles are read every 24 hours per account. A changed activ
 | Claude | `Anthropic-Ratelimit-Unified-7d_oi-Utilization`/`-7d_oi-Reset` | Fable seven-day group (`FableGroupKey`); live validation with a Fable-enabled account is pending |
 | Codex | `X-Codex-Primary-Used-Percent`, `-Reset-At`, `-Reset-After-Seconds`, `-Window-Minutes`, likewise Secondary | 300 minutes is five-hour, 10080 seven-day; absent duration defaults Primary/Secondary to five-hour/seven-day |
 
-Other providers have no passive quota headers. Active results replace an account's group/window set; passive updates change only reported windows. Empty groups remain to prevent passive resurrection. `groups.active_windows` persists the last successful active set: missing/null means unconfirmed, empty means confirmed absent. Absent window baselines are rebased across restart; only active success can restore a window. Missing five-hour windows suppress ignition while historical series remain.
+Other providers have no passive quota headers. Active results replace an account's group/window set; passive updates change only reported windows. Empty groups remain to prevent passive resurrection. `groups.active_windows` persists the last successful active set: missing/null means unconfirmed, empty means confirmed absent. Absent window baselines are rebased across restart; only active success can restore a window. Remaining supported windows can still be ignited when the five-hour window is absent; historical series remain.
 
 Old state migrates from a nonempty valid `plans.windows` signature where possible. Empty signatures cannot distinguish unqueried from absent. Unmigratable existing groups reject passive additions until active success, while existing in-memory windows can update. Truly new groups can initially be established passively. Existence is never inferred from alert baselines or ignition observations.
 
@@ -227,9 +243,13 @@ Relative reset headers use usage `RequestedAt`, because records arrive at reques
 
 ### Schedule
 
-`Schedule.DueAt` waits until today's start hour, or tomorrow after the end hour plus grace minutes. Within the daily window it ignites sliding placeholders immediately, fixed windows after `reset + grace_seconds`, and past/unknown resets immediately, subject to cooldown/retry holds. An exhausted non-five-hour window (≤0.01%) blocks automatic ignition until reset and confirmed recovery, without failure or notification. Status exposes `blocked_window` and `blocked_until`; manual ignition bypasses this gate.
+`ignition.windows` enables `short` (5h) and `long` (7d/30d), both by default; an explicit empty list disables automatic pulses. Provider/group enablement and `providers.Pulseable` also apply. Codex supports main 5h/7d/30d windows, Claude its main 5h/7d windows, and Antigravity its configured supported groups. Scoped Claude pools such as Fable have no pulse model mapping. Kimi and xAI stay monitor-only.
 
-`ignite.Observe` detects sliding placeholders from two active observations whose reset is about five hours away (120-second tolerance) and advances with elapsed time (2% tolerance bounded to 3–10 seconds). Passive data comes from a real request and is never a sliding placeholder. A fixed future reset clears failure state.
+`TargetState.Windows` is keyed by observed window ID. Each entry records rolling-reset detection, reset observations, last attempt/success and `PulsedResetEpoch`. Legacy target timing migrates only into a 5h entry. Shared target state retains model selection, cooldown/retry holds and failure protection.
+
+`Schedule.WindowDueAt` applies reset plus grace and daily hours independently to each enabled window. It never substitutes an earlier daily start for a future fixed reset. Short windows may start with an unknown reset; long windows require a known reset. A serviced `PulsedResetEpoch` suppresses repeated requests against the same stale reset. One request per group serves all currently due windows, and each confirms independently. An exhausted window blocks scheduled requests until reset and confirmed recovery, without failure or notification. Status exposes `blocked_window` and `blocked_until`; manual ignition bypasses this gate.
+
+`ignite.ObserveWindow` detects sliding placeholders using each window's period: the reset lies about one period ahead (120-second tolerance) and advances with elapsed time (2% tolerance bounded to 3–10 seconds). Active readings less than two seconds apart preserve the rolling state. Passive readings come from real requests and are never sliding placeholders.
 
 ### Requests
 
@@ -255,7 +275,7 @@ SSE handles fragmented lines, CRLF and UTF-8, with 1 MiB limits for each line/ev
 
 An independent watchdog closes the host stream two seconds after first output using a monotonic timer. Closing cancels CPA's upstream HTTP context even during blocked reads. Completion, errors, cancellation and plugin stop also release the stream. A mutex arbitrates single terminal ownership, `sync.Once` guarantees one close and calls wait for watchdog exit. A known completion/error cannot be overwritten by late deadlines, cancellation or watchdog panic. A deadline sees already-ready stop/cancellation as cancellation. Close errors retain the execution error as primary. Deliberate cutoff is `output_timeout`, never model fallback, and still requires quota confirmation. EOF before a Claude/Responses terminal event is unexpected; Chat continues after `finish_reason` to capture separate usage before EOF.
 
-Stream/protocol errors become `host.Error` using whitelisted status/code/type fields. Explicit status wins; known rate-limit/authentication/model-not-found codes supply missing 429/401/404. Free message text does not determine status. Explicit stream authentication failures discard local-cooldown markers. Suspension codes/reasons remain whitelisted, with absent status treated as 403. Only approved HTTPS Google appeal URLs are retained. Unknown IDs, raw messages and payloads are discarded. HTTP 401/403/429 do not switch models; 400/404 may use the single upstream fallback described below.
+Stream/protocol errors become `host.Error` using whitelisted status/code/type fields. Explicit status wins; known rate-limit/authentication/model-not-found codes supply missing 429/401/404. Free message text does not determine status. Explicit stream authentication failures discard local-cooldown markers. Suspension codes/reasons remain whitelisted, with absent status treated as 403. Only approved HTTPS Google appeal URLs are retained. Unknown IDs, raw messages and payloads are discarded. Model switching uses the account/model checks under [Model selection](#model-selection); generic HTTP 403/404, authentication, suspension and rate limits do not switch models.
 
 CPA SDK v8.0.4, checked through v8.0.60, has no public startup-cancellation handle. The host uses `context.WithoutCancel`, waits synchronously for the first raw chunk, then registers the stream ID. A lifecycle chunk is not visible output. Before the ID returns the plugin cannot close the request, so startup and stopping follow CPA's waiting behavior. After it returns, an already-stopped call closes immediately. `request_timeout_seconds` applies to other HTTP requests, not model startup or first output. Startup timeout/cancellation needs a future public host handle; returning from a detached goroutine would leave upstream work running and is unsuitable.
 
@@ -269,22 +289,19 @@ Fields include provider, model, auth index, random correlation ID, stream ID, st
 
 ### Model selection
 
-The SDK cannot list models per credential, so `models_api_key` reads the deduplicated union at `/v1/models`. `owned_by` can be ambiguous and candidates use names:
+The SDK cannot list models per credential, so `models_api_key` reads the deduplicated union at `/v1/models`. Provider/group compatibility uses model names because `owned_by` can be ambiguous. Selection precedence is account/group `account_models[authID][groupKey]`, provider/group `model`/`models`, then automatic ranking. Manual choices are strict and never fall back; an available CPA list must contain the chosen ID. If listing fails, an explicit model or the last working eligible model can be used.
 
-- Codex: newest Luna, then other `gpt-` models, excluding images and GPT-OSS.
-- Claude: newest nonthinking Haiku, then Sonnet.
-- Antigravity Gemini: newest Flash, other non-Pro models, then Pro; exclude images.
-- Antigravity Claude / GPT: nonthinking Haiku, Sonnet, Opus, then GPT-OSS and other nonthinking models.
+`pricing.Manager` loads the version-1 `model_prices.json` catalog and `model_price_overrides.json` separately under `data_dir`, with embedded offline entries when no valid catalog exists. The models.dev v1 adapter fetches `https://models.dev/api.json`, supports ETag/Last-Modified validation and keeps usable cached data on error. Refresh is asynchronous and shared across callers, with `pricing.refresh_hours` defaulting to 24 (`0` manual only, `1–168` scheduled) and a one-hour error backoff. Pulses never fetch prices synchronously.
 
-Numeric name components determine newest. Each ignition starts with the latest candidate rather than preferring a previous success. Explicit `model`/`models` restricts selection and must appear in the list; when reading models fails, an explicit or previously successful model can be used.
+Automatic candidates must match the native catalog provider, support active text generation, have both prices and remain enabled. Deprecated/retired, batch-only, embedding, reranking, moderation, transcription and speech-only models are excluded. Known aliases resolve explicitly; reseller prices are not substituted. Rank by `(32 × input + 2 × output) / 1,000,000` USD, then confirmed model on ties, then model ID. This micro-pulse estimate is only for ordering. If no compatible model has a usable price, use provider candidate ordering while preserving known disabled/deprecated/non-text exclusions.
 
-CPA-local `auth_not_found` and `unknown provider for model` move to the next candidate, at most six. An upstream 400/404 can switch once per ignition, except diagnosed suspension; a second rejection is high risk. The error retains the first rejected model/status or full initial refusal if remaining candidates fail locally. HTTP 401/403/429 never switch.
+CPA-local `auth_not_found` and `unknown provider for model` can advance through at most six candidates without consuming the upstream limit. At most two upstream attempts total are allowed. Only a model-specific access/entitlement, unsupported-model or missing-model refusal (including 400/403/404) allows automatic fallback. Generic permission/route errors, authentication, suspension, rate limits and network failures stop the attempt. Deliberate output cutoff never switches models.
 
-After a successful fallback, `noteRefused` records the event and skips that refused group/model for 24 hours (`refusedFor`), reducing repeated unsupported requests. This memory clears on restart and does not override explicit models. Model lists reload at startup, address/key changes and every ignition; initial failures retry with polls. `next_models` holds the automatic first candidate per ignitable provider, using Gemini for Antigravity, without group-specific refusal filtering. Address/key changes clear it before reading again.
+Refusals persist in `state.json` per account/group/model for 24 hours, including failed fallbacks, and clear after a credential fingerprint change. Manual choices bypass refusal cooldowns. Successful fallback emits `model_refused`. Target state keeps `LastSuccessfulModel` and `ConfirmedModel`; group status exposes `manual_model`, `estimated_cheapest_model`, `confirmed_model` and `available_models`. CPA model lists are checked at startup, address/key changes and each ignition, with a 10-minute successful-list cache; initial failures retry with polls. `next_models` supplies provider hints, using Gemini for Antigravity.
 
 ### Confirmation
 
-A 2xx stream ending naturally or deliberately still needs a fixed future five-hour reset observed after the call. Output/usage alone is insufficient. Claude may confirm from response headers; Codex usage is processed while waiting. Otherwise the plugin queries the account on checks separated by 5, 10, 15, 30 and 15 seconds. Antigravity depends entirely on active confirmation. Failure returns `ErrNotConfirmed`.
+A 2xx stream ending naturally or deliberately still needs a fresh fixed future reset for every due window. Both reading and observation timestamps must be at or after the call start; output/usage alone is insufficient. An unchanged long reset cannot confirm an automatic pulse. Each confirmed sibling retains its success and serviced reset even if another window fails. Claude may confirm from response headers; Codex usage is processed while waiting. Otherwise the plugin queries the account on checks separated by 5, 10, 15, 30 and 15 seconds. Antigravity depends entirely on active confirmation. Any unconfirmed due window returns `ErrNotConfirmed`.
 
 ### Failure protection
 
@@ -293,14 +310,14 @@ Manual failure records `ignite_failed` with `manual: "1"`, error and summary; it
 | Automatic failure | Handling |
 | --- | --- |
 | CPA-local model rejection | Try another candidate |
-| Upstream model 400/404 | One fallback, then high-risk handling |
+| Model-specific upstream refusal | At most two upstream attempts total for automatic selection; manual choices never switch |
 | Diagnosed auth/suspension | Pause until credential change or successful manual ignition |
 | High risk: unconfirmed/no model, 400/401/403/404/409/422/429 and unsupported/not-found errors | Pause until next start hour; 429 uses rate-limit notification |
 | Other errors, including ordinary CPA cooldown | Retry at `failure_retry_seconds × multiplier^(n−1)`; pause after `max_transient_failures` |
 
-A CPA cooldown with `reset_seconds ≤ 10 minutes` gets one retry after cooldown plus grace without counting failure; a consecutive cooldown counts normally. Pauses notify once per circuit end time. Success or a fixed future reset clears failures. Summaries remain short; full error text stays in event error and status `last_error`.
+A CPA cooldown with `reset_seconds ≤ 10 minutes` gets one retry after cooldown plus grace without counting failure; a consecutive cooldown counts normally. Pauses notify once per circuit end time. Success clears failures. Quota observations also clear failures when ignition is enabled for the group and every enabled pulseable window has a fixed future reset, confirmed by passive usage or a prior fixed observation at least two seconds earlier. Summaries remain short; full error text stays in event error and status `last_error`.
 
-`checkCooldowns` detects obsolete host cooldowns after polls: more than ten minutes remain, and a quota group with a five-hour window has recent (15-minute) unexhausted readings in all windows. It records `cooldown_stale`, exposes `cooldown_until`/`stale_cooldown` and sends once per cooldown end time, persisting `cooldown_notices`. The plugin does not clear routing cooldowns on the user's behalf.
+`checkCooldowns` detects obsolete host cooldowns after polls: more than ten minutes remain, and a quota group has recent (15-minute) unexhausted readings in all windows. It records `cooldown_stale`, exposes `cooldown_until`/`stale_cooldown` and sends once per cooldown end time, persisting `cooldown_notices`. The plugin does not clear routing cooldowns on the user's behalf.
 
 ### Credential problems
 
@@ -342,7 +359,7 @@ Webhook validation checks HTTP(S) URL, GET/POST/PUT method, no GET body, legal c
 
 Webhook responses are limited to 64 KiB. Non-2xx fails; configured `success_json` additionally requires matching top-level JSON values after JSON normalization, so integer 0 equals response 0.0. Error/test text strips request addresses and redacts URLs, long path/query values, headers and long body strings that may hold tokens.
 
-Notification text is defined in `internal/notify/text.go` and uses English, including fixed `5h`/`7d` window names and `month/day weekday hour:minute` times in the configured time zone. Stored user text is not translated.
+Notification text is defined in `internal/notify/text.go` and uses English, including fixed `5h`/`7d`/`30d` window names and `month/day weekday hour:minute` times in the configured time zone. Stored user text is not translated.
 
 ### Reset signals
 
@@ -358,7 +375,9 @@ The default directory is `<plugins.dir>/data/cpa-pulse`. `DefaultDataDir` reads 
 
 | File | Contents |
 | --- | --- |
-| `state.json` | `groups`: window baselines/active sets; `scheduler`: ignition state; `codex_reset_updates`: seen/sent signals; `cooldown_notices`; compatibility `language`; `plans`: raw plans/check times/window signatures/recheck deadlines/notices; `credentials`: fingerprints/problems/notices. Written via temporary file replacement. |
+| `state.json` | `groups`: window baselines/active sets; `scheduler`: shared target and per-window ignition state; `refused_models`: account/group/model refusal cooldowns; `codex_reset_updates`: seen/sent signals; `cooldown_notices`; compatibility `language`; `plans`: raw plans/check times/window signatures/recheck deadlines/notices; `credentials`: fingerprints/problems/notices. Written via temporary file replacement. |
+| `model_prices.json` | Version-1 source catalog, validators, timestamps and last refresh error |
+| `model_price_overrides.json` | Version-1 custom prices and disabled-model tombstones; unaffected by catalog refresh |
 | `history/YYYY-MM-DD.jsonl` | Samples and events partitioned by UTC date |
 | `instance.lock` | Exclusive engine instance lock |
 

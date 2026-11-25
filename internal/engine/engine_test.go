@@ -104,7 +104,7 @@ func newTestEngine(t *testing.T, h *fakeHost, c *clock) (*Engine, *fakeSender) {
 func newTestEngineIn(t *testing.T, h *fakeHost, c *clock, dir string) (*Engine, *fakeSender) {
 	t.Helper()
 	models := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Write([]byte(`{"data":[{"id":"gpt-6-luna"},{"id":"claude-haiku-4-5-20251001"},{"id":"claude-3-5-haiku-20241022"},{"id":"claude-sonnet-4-6"},{"id":"gemini-3.8-flash-high"}]}`))
+		w.Write([]byte(`{"data":[{"id":"gpt-6-luna"},{"id":"claude-3-5-haiku-20241022"},{"id":"claude-haiku-4-5-20251001"},{"id":"claude-sonnet-4-6"},{"id":"gemini-3.8-flash-high"}]}`))
 	}))
 	t.Cleanup(models.Close)
 	cfg := config.Default()
@@ -326,11 +326,11 @@ func TestIgnitionIsConfirmedFromResponseHeaders(t *testing.T) {
 		t.Fatalf("want one ignition, got %d", len(h.executed))
 	}
 	req := h.executed[0]
-	if req.AuthID != "claude.json" || req.ForcedProvider != "claude" || req.Model != "claude-haiku-4-5-20251001" || req.EntryProtocol != "claude" {
+	if req.AuthID != "claude.json" || req.ForcedProvider != "claude" || req.Model != "claude-3-5-haiku-20241022" || req.EntryProtocol != "claude" {
 		t.Fatalf("ignition request %+v", req)
 	}
 	ts := e.state.Target("claude:3:claude:main")
-	if ts.LastModel != "claude-haiku-4-5-20251001" || ts.LastSuccessEpoch == 0 || ts.ConsecutiveFailures != 0 {
+	if ts.LastModel != "claude-3-5-haiku-20241022" || ts.LastSuccessEpoch == 0 || ts.ConsecutiveFailures != 0 {
 		t.Fatalf("target state %+v", ts)
 	}
 	var ignited *Event
@@ -339,7 +339,7 @@ func TestIgnitionIsConfirmedFromResponseHeaders(t *testing.T) {
 			ignited = &e.Status().Events[i]
 		}
 	}
-	if ignited == nil || ignited.Params["model"] != "claude-haiku-4-5-20251001" || ignited.Params["reset"] == "" {
+	if ignited == nil || ignited.Params["model"] != "claude-3-5-haiku-20241022" || ignited.Params["reset"] == "" {
 		t.Fatalf("ignite event %+v", ignited)
 	}
 	e.refreshTargets(cfg)
@@ -360,26 +360,7 @@ func TestIgnitionTriesNextModelWhenCredentialRejectsOne(t *testing.T) {
 	e.Configure(cfg, nil)
 	e.poll(ctx, cfg, c.t, "", false)
 	e.performDue(ctx, cfg)
-	if len(h.executed) != 2 || h.executed[1].Model != "claude-3-5-haiku-20241022" {
-		t.Fatalf("executed %+v", h.executed)
-	}
-	if ts := e.state.Target("claude:3:claude:main"); ts.LastModel != "claude-3-5-haiku-20241022" {
-		t.Fatalf("target state %+v", ts)
-	}
-}
-
-func TestIgnitionUsesNewestModelOverLastSuccessfulOne(t *testing.T) {
-	c := &clock{t: time.Date(2026, 10, 4, 10, 0, 0, 0, testZone)}
-	h := claudeIgnitionHost(c, nil)
-	e, _ := newTestEngine(t, h, c)
-	ctx := context.Background()
-	cfg := e.config()
-	cfg.Providers["codex"] = config.Provider{Monitor: true}
-	e.Configure(cfg, nil)
-	e.state.Target("claude:3:claude:main").LastModel = "claude-3-5-haiku-20241022"
-	e.poll(ctx, cfg, c.t, "", false)
-	e.performDue(ctx, cfg)
-	if len(h.executed) != 1 || h.executed[0].Model != "claude-haiku-4-5-20251001" {
+	if len(h.executed) != 2 || h.executed[1].Model != "claude-haiku-4-5-20251001" {
 		t.Fatalf("executed %+v", h.executed)
 	}
 	if ts := e.state.Target("claude:3:claude:main"); ts.LastModel != "claude-haiku-4-5-20251001" {
@@ -387,9 +368,28 @@ func TestIgnitionUsesNewestModelOverLastSuccessfulOne(t *testing.T) {
 	}
 }
 
-func TestIgnitionFallsBackWhenProviderRefusesNewestModel(t *testing.T) {
+func TestIgnitionUsesCheapestModelOverLastSuccessfulOne(t *testing.T) {
 	c := &clock{t: time.Date(2026, 10, 4, 10, 0, 0, 0, testZone)}
-	refused := &host.Error{Code: "model_execution_failed", Message: `{"type":"error","error":{"type":"not_found_error","message":"model: claude-haiku-4-5-20251001"}}`, Status: 404}
+	h := claudeIgnitionHost(c, nil)
+	e, _ := newTestEngine(t, h, c)
+	ctx := context.Background()
+	cfg := e.config()
+	cfg.Providers["codex"] = config.Provider{Monitor: true}
+	e.Configure(cfg, nil)
+	e.state.Target("claude:3:claude:main").LastModel = "claude-haiku-4-5-20251001"
+	e.poll(ctx, cfg, c.t, "", false)
+	e.performDue(ctx, cfg)
+	if len(h.executed) != 1 || h.executed[0].Model != "claude-3-5-haiku-20241022" {
+		t.Fatalf("executed %+v", h.executed)
+	}
+	if ts := e.state.Target("claude:3:claude:main"); ts.LastModel != "claude-3-5-haiku-20241022" {
+		t.Fatalf("target state %+v", ts)
+	}
+}
+
+func TestIgnitionFallsBackWhenProviderRefusesCheapestModel(t *testing.T) {
+	c := &clock{t: time.Date(2026, 10, 4, 10, 0, 0, 0, testZone)}
+	refused := &host.Error{Code: "model_execution_failed", Message: `{"type":"error","error":{"type":"not_found_error","message":"model: claude-3-5-haiku-20241022"}}`, Status: 404}
 	h := claudeIgnitionHost(c, refused)
 	e, _ := newTestEngine(t, h, c)
 	ctx := context.Background()
@@ -398,10 +398,10 @@ func TestIgnitionFallsBackWhenProviderRefusesNewestModel(t *testing.T) {
 	e.Configure(cfg, nil)
 	e.poll(ctx, cfg, c.t, "", false)
 	e.performDue(ctx, cfg)
-	if len(h.executed) != 2 || h.executed[1].Model != "claude-3-5-haiku-20241022" {
+	if len(h.executed) != 2 || h.executed[1].Model != "claude-haiku-4-5-20251001" {
 		t.Fatalf("executed %+v", h.executed)
 	}
-	if ts := e.state.Target("claude:3:claude:main"); ts.LastModel != "claude-3-5-haiku-20241022" || ts.ConsecutiveFailures != 0 {
+	if ts := e.state.Target("claude:3:claude:main"); ts.LastModel != "claude-haiku-4-5-20251001" || ts.ConsecutiveFailures != 0 {
 		t.Fatalf("target state %+v", ts)
 	}
 	var noted *Event
@@ -410,7 +410,7 @@ func TestIgnitionFallsBackWhenProviderRefusesNewestModel(t *testing.T) {
 			noted = &e.Status().Events[i]
 		}
 	}
-	if noted == nil || noted.Params["model"] != "claude-haiku-4-5-20251001" || noted.Params["fallback"] != "claude-3-5-haiku-20241022" || noted.Params["hours"] != "24" {
+	if noted == nil || noted.Params["model"] != "claude-3-5-haiku-20241022" || noted.Params["fallback"] != "claude-haiku-4-5-20251001" || noted.Params["hours"] != "24" {
 		t.Fatalf("refusal event %+v", noted)
 	}
 
@@ -421,11 +421,11 @@ func TestIgnitionFallsBackWhenProviderRefusesNewestModel(t *testing.T) {
 		}
 	}
 	c.add(23 * time.Hour)
-	if model, _, err := e.execute(ctx, cfg, target); err != nil || model != "claude-3-5-haiku-20241022" || len(h.executed) != 3 {
+	if model, _, err := e.execute(ctx, cfg, target); err != nil || model != "claude-haiku-4-5-20251001" || len(h.executed) != 3 {
 		t.Fatalf("a refused model is skipped for a day: %s %v %+v", model, err, h.executed)
 	}
 	c.add(time.Hour)
-	if model, _, err := e.execute(ctx, cfg, target); err != nil || model != "claude-haiku-4-5-20251001" {
+	if model, _, err := e.execute(ctx, cfg, target); err != nil || model != "claude-3-5-haiku-20241022" {
 		t.Fatalf("a refused model is tried again after a day: %s %v", model, err)
 	}
 }
@@ -434,7 +434,7 @@ func TestIgnitionFallsBackOnlyOnceForRefusedModels(t *testing.T) {
 	c := &clock{t: time.Date(2026, 10, 4, 10, 0, 0, 0, testZone)}
 	h := claudeIgnitionHost(c, nil)
 	h.execute = func(pluginapi.HostModelExecutionRequest) (pluginapi.HostModelExecutionResponse, error) {
-		return pluginapi.HostModelExecutionResponse{StatusCode: 400, Body: []byte(`{"type":"error","error":{"type":"invalid_request_error"}}`)}, nil
+		return pluginapi.HostModelExecutionResponse{}, &host.Error{Status: 400, Code: "model_not_supported"}
 	}
 	e, _ := newTestEngine(t, h, c)
 	ctx := context.Background()
@@ -450,7 +450,7 @@ func TestIgnitionFallsBackOnlyOnceForRefusedModels(t *testing.T) {
 	if ts.CircuitOpenUntilEpoch == 0 {
 		t.Fatalf("a second refusal must pause the target: %+v", ts)
 	}
-	if !strings.Contains(ts.LastError, "earlier claude-haiku-4-5-20251001 was rejected by the provider (status 400)") {
+	if !strings.Contains(ts.LastError, "earlier claude-3-5-haiku-20241022 was rejected by the provider (status 400)") {
 		t.Fatalf("the error must name the first refused model: %s", ts.LastError)
 	}
 	for _, ev := range e.Status().Events {
@@ -474,7 +474,7 @@ func TestStatusShowsNextAutomaticModels(t *testing.T) {
 	}
 	e.performDue(ctx, cfg)
 	got := e.Status().NextModels
-	want := map[string]string{"codex": "gpt-6-luna", "claude": "claude-haiku-4-5-20251001", "antigravity": "gemini-3.8-flash-high"}
+	want := map[string]string{"codex": "gpt-6-luna", "claude": "claude-3-5-haiku-20241022", "antigravity": "gemini-3.8-flash-high"}
 	if !maps.Equal(got, want) {
 		t.Fatalf("next models %v", got)
 	}
@@ -603,7 +603,7 @@ func TestModelListIsReadAfterStartAndKeyChange(t *testing.T) {
 			w.WriteHeader(http.StatusServiceUnavailable)
 			return
 		}
-		w.Write([]byte(`{"data":[{"id":"claude-haiku-5-5"},{"id":"claude-haiku-4-5-20251001"}]}`))
+		w.Write([]byte(`{"data":[{"id":"claude-haiku-5-5"},{"id":"claude-3-5-haiku-20241022"}]}`))
 	}))
 	defer server.Close()
 	ctx := context.Background()
@@ -735,7 +735,7 @@ func TestHistoryFiltersWindowKindAndBucketsLongSpans(t *testing.T) {
 		return kinds
 	}
 	// No filter or an unknown value returns every window.
-	for _, kind := range []string{"", "30d"} {
+	for _, kind := range []string{"", "unknown"} {
 		if kinds := kindsOf(kind); !kinds[quota.KindFiveHour] || !kinds[quota.KindSevenDay] {
 			t.Fatalf("window %q: want both kinds, got %v", kind, kinds)
 		}

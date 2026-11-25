@@ -12,6 +12,7 @@ import (
 	"github.com/NotRllyRn/cpa-pulse/internal/failure"
 	"github.com/NotRllyRn/cpa-pulse/internal/host"
 	"github.com/NotRllyRn/cpa-pulse/internal/ignite"
+	"github.com/NotRllyRn/cpa-pulse/internal/models"
 	"github.com/NotRllyRn/cpa-pulse/internal/notify"
 	"github.com/NotRllyRn/cpa-pulse/internal/providers"
 	"github.com/NotRllyRn/cpa-pulse/internal/quota"
@@ -23,20 +24,21 @@ const maxCandidates = 6
 
 // TargetView is the ignition status of one quota group.
 type TargetView struct {
-	Key                 string    `json:"key"`
-	Label               string    `json:"label"`
-	Provider            string    `json:"provider"`
-	AuthIndex           string    `json:"auth_index"`
-	NextDue             time.Time `json:"next_due"`
-	Reset               time.Time `json:"reset,omitempty"`
-	Rolling             bool      `json:"rolling"`
-	LastSuccess         time.Time `json:"last_success,omitempty"`
-	LastAttempt         time.Time `json:"last_attempt,omitempty"`
-	LastModel           string    `json:"last_model,omitempty"`
-	LastError           string    `json:"last_error,omitempty"`
-	ConsecutiveFailures int       `json:"consecutive_failures"`
-	CircuitUntil        time.Time `json:"circuit_until,omitempty"`
-	CircuitReason       string    `json:"circuit_reason,omitempty"`
+	Windows             []TargetWindowStatus `json:"windows"`
+	Key                 string               `json:"key"`
+	Label               string               `json:"label"`
+	Provider            string               `json:"provider"`
+	AuthIndex           string               `json:"auth_index"`
+	NextDue             time.Time            `json:"next_due"`
+	Reset               time.Time            `json:"reset,omitempty"`
+	Rolling             bool                 `json:"rolling"`
+	LastSuccess         time.Time            `json:"last_success,omitempty"`
+	LastAttempt         time.Time            `json:"last_attempt,omitempty"`
+	LastModel           string               `json:"last_model,omitempty"`
+	LastError           string               `json:"last_error,omitempty"`
+	ConsecutiveFailures int                  `json:"consecutive_failures"`
+	CircuitUntil        time.Time            `json:"circuit_until,omitempty"`
+	CircuitReason       string               `json:"circuit_reason,omitempty"`
 	// BlockedWindow names a used-up window that holds ignition back, and
 	// BlockedUntil is its reset, zero when unknown.
 	BlockedWindow string    `json:"blocked_window,omitempty"`
@@ -44,10 +46,13 @@ type TargetView struct {
 }
 
 type target struct {
-	group  GroupView
-	cred   *Cred
-	reset  time.Time
-	source string
+	group      GroupView
+	cred       *Cred
+	reset      time.Time
+	source     string
+	due        []WindowView
+	confirmed  map[string]bool
+	rollingDue map[string]bool
 }
 
 // groupIgnitable reports whether ignition is enabled for the group.
@@ -71,24 +76,36 @@ func groupIgnitable(cfg config.Config, provider, sourceLabel string) bool {
 	return false
 }
 
-// collectTargets returns the groups that have a 5-hour window and ignition
-// enabled.
+// collectTargets returns groups with a supported request-to-quota mapping.
 func (e *Engine) collectTargets(cfg config.Config) []target {
+	return e.windowTargets(cfg, false)
+}
+
+func (e *Engine) windowTargets(cfg config.Config, includeDisabled bool) []target {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	var out []target
 	for _, group := range e.groups {
 		cred := e.creds[group.AuthIndex]
-		if cred == nil || !groupIgnitable(cfg, group.Provider, group.SourceLabel) {
+		spec := providers.Lookup(group.Provider)
+		if cred == nil || spec == nil || spec.Ignition == nil || (!includeDisabled && !groupIgnitable(cfg, group.Provider, group.SourceLabel)) {
 			continue
 		}
-		w, ok := group.fiveHour()
-		if !ok {
+		recognized, supported := false, false
+		for _, w := range group.Windows {
+			recognized = recognized || quota.Class(w.Window) != ""
+			supported = supported || providers.Pulseable(group.Provider, group.SourceLabel, w.Window)
+		}
+		if !recognized || (!includeDisabled && !supported) {
 			continue
 		}
 		snapshot := *group
 		snapshot.Windows = append([]WindowView(nil), group.Windows...)
-		out = append(out, target{group: snapshot, cred: cred, reset: w.Reset, source: string(w.Source)})
+		t := target{group: snapshot, cred: cred}
+		if w, ok := group.fiveHour(); ok {
+			t.reset, t.source = w.Reset, string(w.Source)
+		}
+		out = append(out, t)
 	}
 	sortTargets(out)
 	return out
@@ -106,23 +123,13 @@ func (e *Engine) nextDue(cfg config.Config) time.Time {
 	if e.state == nil {
 		return time.Time{}
 	}
-	schedule := e.schedule(cfg)
 	now := e.now()
 	var next time.Time
 	for _, t := range e.collectTargets(cfg) {
-		if e.credentialBlocked(t.cred.AuthIndex) {
-			continue
-		}
-		due := schedule.DueAt(e.state.Target(t.group.Key), t.reset, now)
-		if w, blocked := exhaustedWindow(t.group, now); blocked {
-			// Wake at the reset; the next poll shows whether the quota is back.
-			if w.Reset.IsZero() {
-				continue
+		for _, w := range e.targetWindows(cfg, t, now) {
+			if !w.NextDue.IsZero() && (next.IsZero() || w.NextDue.Before(next)) {
+				next = w.NextDue
 			}
-			due = w.Reset
-		}
-		if next.IsZero() || due.Before(next) {
-			next = due
 		}
 	}
 	return next
@@ -133,19 +140,18 @@ func (e *Engine) refreshTargets(cfg config.Config) {
 	if e.state == nil {
 		return
 	}
-	schedule := e.schedule(cfg)
 	now := e.now()
 	targets := e.collectTargets(cfg)
 	views := make([]TargetView, 0, len(targets))
 	for _, t := range targets {
 		ts := e.state.Target(t.group.Key)
+		e.publishModelState(t.group.Key)
 		view := TargetView{
 			Key:                 t.group.Key,
 			Label:               t.group.Label,
 			Provider:            t.group.Provider,
 			AuthIndex:           t.group.AuthIndex,
-			Reset:               t.reset,
-			Rolling:             ts.RollingReset,
+			Windows:             e.targetWindows(cfg, t, now),
 			LastSuccess:         epochTime(ts.LastSuccessEpoch),
 			LastAttempt:         epochTime(ts.LastAttemptEpoch),
 			LastModel:           ts.LastModel,
@@ -159,8 +165,11 @@ func (e *Engine) refreshTargets(cfg config.Config) {
 		if w, blocked := exhaustedWindow(t.group, now); blocked {
 			view.BlockedWindow = quota.ShortLabel(w.Label)
 			view.BlockedUntil = w.Reset
-		} else if cfg.Ignition.Enabled && !e.credentialBlocked(t.cred.AuthIndex) {
-			view.NextDue = schedule.DueAt(ts, t.reset, now)
+		}
+		for _, w := range view.Windows {
+			if !w.NextDue.IsZero() && (view.NextDue.IsZero() || w.NextDue.Before(view.NextDue)) {
+				view.NextDue, view.Reset, view.Rolling = w.NextDue, w.Reset, w.Rolling
+			}
 		}
 		views = append(views, view)
 	}
@@ -178,7 +187,6 @@ func epochTime(epoch float64) time.Time {
 
 // performDue ignites every target whose due time has come.
 func (e *Engine) performDue(ctx context.Context, cfg config.Config) bool {
-	schedule := e.schedule(cfg)
 	attempted := false
 	for _, t := range e.collectTargets(cfg) {
 		if ctx.Err() != nil {
@@ -195,8 +203,8 @@ func (e *Engine) performDue(ctx context.Context, cfg config.Config) bool {
 		if e.credentialBlocked(t.cred.AuthIndex) {
 			continue
 		}
-		due := schedule.DueAt(e.state.Target(t.group.Key), t.reset, now)
-		if due.After(now.Add(250 * time.Millisecond)) {
+		t.due = e.dueWindows(cfg, t, now)
+		if len(t.due) == 0 {
 			continue
 		}
 		e.igniteTarget(ctx, cfg, t, false)
@@ -223,6 +231,45 @@ func (e *Engine) igniteTarget(ctx context.Context, cfg config.Config, t target, 
 	schedule := e.schedule(cfg)
 	start := e.now()
 	ts.LastAttemptEpoch = float64(start.UnixNano()) / 1e9
+	if t.due == nil {
+		if manual {
+			// A manual retry bypasses shared delays but must still confirm
+			// each pending window from its own quota evidence.
+			for _, w := range t.group.Windows {
+				if !providers.Pulseable(t.group.Provider, t.group.SourceLabel, w.Window) {
+					continue
+				}
+				ws := ts.IgnitionWindow(w.ID, quota.IsFiveHour(w.Window))
+				if ws.RollingReset || (!w.Reset.IsZero() && !w.Reset.After(start)) || (w.Reset.IsZero() && quota.IsFiveHour(w.Window)) {
+					t.due = append(t.due, w)
+				}
+			}
+		} else {
+			t.due = e.dueWindows(cfg, t, start)
+		}
+		if len(t.due) == 0 {
+			t.due = nil
+			for _, w := range t.group.Windows {
+				if providers.Pulseable(t.group.Provider, t.group.SourceLabel, w.Window) && quota.IsFiveHour(w.Window) {
+					t.due = append(t.due, w)
+				}
+			}
+			if manual && len(t.due) == 0 {
+				for _, w := range t.group.Windows {
+					if providers.Pulseable(t.group.Provider, t.group.SourceLabel, w.Window) {
+						t.due = append(t.due, w)
+					}
+				}
+			}
+		}
+	}
+	t.confirmed = map[string]bool{}
+	t.rollingDue = map[string]bool{}
+	for _, w := range t.due {
+		ws := ts.IgnitionWindow(w.ID, quota.IsFiveHour(w.Window))
+		t.rollingDue[w.ID] = ws.RollingReset
+		ws.LastAttemptEpoch = start.Unix()
+	}
 	e.dirty = true
 	// The fingerprint of the credential the request goes out with; a
 	// rejection waits for another one. When it cannot be read, a rejection
@@ -238,6 +285,14 @@ func (e *Engine) igniteTarget(ctx context.Context, cfg config.Config, t target, 
 		err = e.confirm(ctx, cfg, t, start, resp, manual)
 	}
 	now := e.now()
+	if len(t.confirmed) > 0 {
+		if len(t.due) > 0 && len(t.confirmed) == len(t.due) {
+			ts.LastSuccessEpoch = float64(now.UnixNano()) / 1e9
+		}
+		ts.LastModel = model
+		ts.LastSuccessfulModel, ts.ConfirmedModel = model, model
+		e.publishModelState(t.group.Key)
+	}
 	if err != nil {
 		d := failure.Diagnose(err)
 		if manual {
@@ -306,14 +361,28 @@ func (e *Engine) igniteTarget(ctx context.Context, cfg config.Config, t target, 
 		return err
 	}
 	ignite.RecordSuccess(ts, model, now)
+	ts.LastSuccessfulModel, ts.ConfirmedModel = model, model
+	e.publishModelState(t.group.Key)
 	e.dirty = true
 	e.noteCredentialOK(ctx, t.cred, sourceIgnite)
 	resetText := "unknown"
 	params := map[string]string{"model": model}
 	if group, ok := e.group(t.group.Key); ok {
-		if w, ok := group.fiveHour(); ok && !w.Reset.IsZero() {
-			resetText = w.Reset.In(cfg.Location()).Format("01/02 15:04:05")
-			params["reset"] = eventTime(w.Reset)
+		reset := time.Time{}
+		if w, ok := group.fiveHour(); ok {
+			reset = w.Reset
+		}
+		if reset.IsZero() {
+			for _, w := range group.Windows {
+				if t.confirmed[w.ID] && !w.Reset.IsZero() {
+					reset = w.Reset
+					break
+				}
+			}
+		}
+		if !reset.IsZero() {
+			resetText = reset.In(cfg.Location()).Format("01/02 15:04:05")
+			params["reset"] = eventTime(reset)
 		}
 	}
 	kind := "ignite"
@@ -338,14 +407,15 @@ func (e *Engine) group(key string) (GroupView, bool) {
 	return snapshot, true
 }
 
-// execute sends the ignition request with the newest candidate model. It
-// tries the next candidate when CPA rejects a model for the pinned
-// credential, and once per ignition when the provider refuses a model.
+// execute tries compatible models in price order, with at most two upstream
+// attempts. Manual overrides use one model; local routing failures may advance.
 func (e *Engine) execute(ctx context.Context, cfg config.Config, t target) (string, pluginapi.HostModelExecutionResponse, error) {
 	var empty pluginapi.HostModelExecutionResponse
 	spec := providers.Lookup(t.group.Provider)
-	override := configuredModel(cfg, t.group.Provider, t.group.SourceLabel)
+	override := manualModel(cfg, t)
 	ts := e.state.Target(t.group.Key)
+	e.noteModelFingerprint(t.cred, e.credentialFingerprint(t.cred))
+	defer e.publishModelState(t.group.Key)
 
 	available, err := e.lister.List(ctx, cfg.CPABaseURL, cfg.ModelsAPIKey)
 	e.noteModels(available, err)
@@ -354,26 +424,41 @@ func (e *Engine) execute(ctx context.Context, cfg config.Config, t target) (stri
 	case err != nil && override != "":
 		candidates = []string{override}
 	case err != nil && ts.LastModel != "":
-		// Keep igniting with the last working model while the list is unavailable.
-		candidates = []string{ts.LastModel}
+		// The last working model remains a fallback while CPA's list is unavailable.
+		candidates = rankedModels(e.priceManager(), spec, t.group.SourceLabel, []string{ts.LastModel}, ts.ConfirmedModel)
+		if len(candidates) == 0 {
+			return "", empty, fmt.Errorf("%w: no eligible model", ignite.ErrNoModel)
+		}
 	case err != nil:
 		return "", empty, err
 	default:
-		candidates, err = providers.Candidates(spec, t.group.SourceLabel, override, available)
+		if override != "" {
+			candidates, err = providers.Candidates(spec, t.group.SourceLabel, override, available)
+		} else {
+			candidates = rankedModels(e.priceManager(), spec, t.group.SourceLabel, available, ts.ConfirmedModel)
+		}
 		if err != nil {
 			return "", empty, fmt.Errorf("%w: %v", ignite.ErrNoModel, err)
+		}
+		if len(candidates) == 0 {
+			return "", empty, fmt.Errorf("%w: no eligible model", ignite.ErrNoModel)
 		}
 	}
 	if override == "" {
 		candidates = e.skipRefused(t.group.Key, candidates)
 	}
+	if len(candidates) == 0 {
+		return "", empty, fmt.Errorf("%w: no eligible model; retry after cooldown", ignite.ErrNoModel)
+	}
 	if len(candidates) > maxCandidates {
 		candidates = candidates[:maxCandidates]
 	}
 
-	var lastErr, refusedErr error
+	var lastErr error
+	upstream := 0
 	refused := ""
-	for i, model := range candidates {
+	refusedStatus := 0
+	for _, model := range candidates {
 		if ctx.Err() != nil || e.stopping() {
 			return model, empty, context.Canceled
 		}
@@ -386,13 +471,8 @@ func (e *Engine) execute(ctx context.Context, cfg config.Config, t target) (stri
 			forced = t.group.Provider
 		}
 		resp, err := e.executeStream(ctx, t, pluginapi.HostModelExecutionRequest{
-			EntryProtocol:  protocol,
-			ExitProtocol:   protocol,
-			Model:          model,
-			Stream:         true,
-			Body:           body,
-			ForcedProvider: forced,
-			AuthID:         t.cred.ID,
+			EntryProtocol: protocol, ExitProtocol: protocol, Model: model,
+			Stream: true, Body: body, ForcedProvider: forced, AuthID: t.cred.ID,
 		}, ignitionOutputWindow)
 		if err == nil {
 			if refused != "" {
@@ -400,32 +480,72 @@ func (e *Engine) execute(ctx context.Context, cfg config.Config, t target) (stri
 			}
 			return model, resp, nil
 		}
-		if ignite.Classify(err) == ignite.Unsupported {
-			lastErr = err
+		lastErr = err
+		if override == "" && localModelUnavailable(err) {
 			continue
 		}
-		// CPA lists a new model for every credential of the provider, and one
-		// account may not be able to use it yet. A second refusal points at
-		// the request or the account, so it ends the ignition.
-		if refused == "" && i < len(candidates)-1 && ignite.ModelRejected(err) {
-			refused, refusedErr = model, err
-			continue
+		upstream++
+		if override == "" && modelRejected(err) {
+			e.rememberRefused(t, model)
+			if upstream < 2 {
+				refused, refusedStatus = model, host.StatusOf(err)
+				continue
+			}
 		}
 		if refused != "" {
-			// Only the status of the refusal is added: its text could carry
-			// markers that change how the final error is classified.
-			status := ""
-			if code := host.StatusOf(refusedErr); code != 0 {
-				status = fmt.Sprintf(" (status %d)", code)
-			}
-			err = fmt.Errorf("%w; earlier %s was rejected by the provider%s", err, refused, status)
+			err = fmt.Errorf("%w; earlier %s was rejected by the provider (status %d)", err, refused, refusedStatus)
 		}
 		return model, resp, err
 	}
-	if refused != "" {
-		return "", empty, fmt.Errorf("%w (%s was rejected by the provider: %v; last attempt: %v)", ignite.ErrNoModel, refused, refusedErr, lastErr)
-	}
 	return "", empty, fmt.Errorf("%w (last attempt: %v)", ignite.ErrNoModel, lastErr)
+}
+
+// Only CPA's local model-routing failures can advance without an upstream attempt.
+func localModelUnavailable(err error) bool {
+	d := failure.Diagnose(err)
+	if d.Reason != "" || d.Status == 401 || d.Status == 403 || d.Status == 429 {
+		return false
+	}
+	text := strings.ToLower(err.Error())
+	return strings.Contains(text, "auth_not_found") || strings.Contains(text, "unknown provider for model")
+}
+
+func modelRejected(err error) bool {
+	d := failure.Diagnose(err)
+	if d.Reason != "" || d.Status == 401 || d.Status == 429 {
+		return false
+	}
+	text := strings.ToLower(err.Error())
+	explicit := false
+	for _, marker := range []string{"model_not_found", "model_not_supported", "unsupported_model", "invalid_model", "model_access_denied", "model_entitlement"} {
+		if strings.Contains(text, marker) {
+			explicit = true
+		}
+	}
+	if d.Status == 404 && strings.Contains(text, "not_found_error") {
+		return true
+	}
+	if d.Status != 0 && d.Status != 400 && d.Status != 403 && d.Status != 404 {
+		return false
+	}
+	message := err.Error()
+	var hostErr *host.Error
+	if errors.As(err, &hostErr) {
+		message = hostErr.Message
+	}
+	return explicit || modelAccessMessage(strings.ToLower(message))
+}
+
+func modelAccessMessage(text string) bool {
+	if !strings.Contains(text, "model") {
+		return false
+	}
+	for _, marker := range []string{"not found", "not supported", "unsupported", "does not exist", "do not have access", "does not have access", "no access", "not entitled", "not available", "permission to access"} {
+		if strings.Contains(text, marker) {
+			return true
+		}
+	}
+	return false
 }
 
 // refusedFor is how long a model the provider refused for a quota group is
@@ -437,10 +557,7 @@ const refusedFor = 24 * time.Hour
 // noteRefused remembers that the provider refused model for the target while
 // fallback worked, which shows the refusal concerns the model.
 func (e *Engine) noteRefused(t target, model, fallback string) {
-	if e.refused == nil {
-		e.refused = map[string]time.Time{}
-	}
-	e.refused[t.group.Key+"\x00"+model] = e.now()
+	e.rememberRefused(t, model)
 	hours := strconv.Itoa(int(refusedFor / time.Hour))
 	e.addEventDetail("warn", "model_refused", t.group.Key, t.group.Label,
 		fmt.Sprintf("%s was rejected by the provider; using %s and skipping it for %s hours", model, fallback, hours),
@@ -448,13 +565,22 @@ func (e *Engine) noteRefused(t target, model, fallback string) {
 		map[string]string{"model": model, "fallback": fallback, "hours": hours})
 }
 
-// skipRefused drops the candidates refused for the target within refusedFor,
-// unless that leaves none, and forgets expired refusals.
+func (e *Engine) rememberRefused(t target, model string) {
+	if e.refused == nil {
+		e.refused = map[string]time.Time{}
+	}
+	e.refused[t.group.Key+"\x00"+model] = e.now()
+	e.state.RefusedModels = e.refused
+	e.dirty = true
+}
+
+// skipRefused drops refused candidates and forgets expired refusals.
 func (e *Engine) skipRefused(key string, candidates []string) []string {
 	now := e.now()
 	for k, at := range e.refused {
 		if now.Sub(at) >= refusedFor {
 			delete(e.refused, k)
+			e.dirty = true
 		}
 	}
 	var out []string
@@ -462,9 +588,6 @@ func (e *Engine) skipRefused(key string, candidates []string) []string {
 		if _, ok := e.refused[key+"\x00"+model]; !ok {
 			out = append(out, model)
 		}
-	}
-	if len(out) == 0 {
-		return candidates
 	}
 	return out
 }
@@ -483,7 +606,7 @@ func (e *Engine) maybeReadModels(ctx context.Context, cfg config.Config, pollDue
 		// ignition.
 		e.modelsSource, e.modelsTried, e.modelsOK = source, false, false
 		e.mu.Lock()
-		e.nextModels, e.modelsErr = nil, ""
+		e.nextModels, e.modelsErr, e.availableModels = nil, "", nil
 		e.mu.Unlock()
 	}
 	if source == "" || e.modelsOK || (e.modelsTried && !pollDue) {
@@ -499,6 +622,7 @@ func (e *Engine) maybeReadModels(ctx context.Context, cfg config.Config, pollDue
 // automatic candidate of each provider. A failed read keeps the last known
 // models.
 func (e *Engine) noteModels(available []string, err error) {
+	available = models.Unique(available)
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	if err != nil {
@@ -506,12 +630,13 @@ func (e *Engine) noteModels(available []string, err error) {
 		return
 	}
 	e.modelsErr = ""
+	e.availableModels = append([]string{}, available...)
 	next := map[string]string{}
 	for _, p := range providers.All() {
 		if p.Ignition == nil {
 			continue
 		}
-		if candidates, err := providers.Candidates(p, p.Ignition.HintGroup, "", available); err == nil {
+		if candidates := rankedModels(e.pricingMgr, p, p.Ignition.HintGroup, available, ""); len(candidates) > 0 {
 			next[p.ID] = candidates[0]
 		}
 	}
@@ -537,7 +662,7 @@ func (e *Engine) confirmed(key string, start, now time.Time) bool {
 	if !ok || w.ObservedAt.Before(start) || w.Reset.IsZero() || !w.Reset.After(now) {
 		return false
 	}
-	return !e.state.Target(key).RollingReset
+	return !e.state.Target(key).IgnitionWindow(w.ID, true).RollingReset
 }
 
 // confirm checks that the ignition started a window. Claude responses carry
@@ -556,20 +681,20 @@ func (e *Engine) confirm(ctx context.Context, cfg config.Config, t target, start
 		e.notePassiveFable(t.cred, groups)
 		e.applyGroups(ctx, cfg, t.cred, groups, quota.SourcePassive, now, start, true)
 	}
-	if e.confirmed(t.group.Key, start, e.now()) {
+	if e.confirmWindows(t, start, e.now(), manual) {
 		return nil
 	}
 	for _, delay := range confirmDelays {
 		if !e.waitWithUsage(ctx, delay) {
 			return context.Canceled
 		}
-		if e.confirmed(t.group.Key, start, e.now()) {
+		if e.confirmWindows(t, start, e.now(), manual) {
 			return nil
 		}
 		if err := e.queryCred(ctx, cfg, t.cred, !manual); err != nil {
 			e.logf("warn", "Quota refresh failed during ignition confirmation: %s: %v", t.group.Label, err)
 		}
-		if e.confirmed(t.group.Key, start, e.now()) {
+		if e.confirmWindows(t, start, e.now(), manual) {
 			return nil
 		}
 	}

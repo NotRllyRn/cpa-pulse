@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"maps"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -279,7 +280,7 @@ type WindowStatus struct {
 	ID    string `json:"id"`
 	Label string `json:"label"`
 	Short string `json:"short"`
-	// Kind is "5h", "7d" or empty for a window of another length.
+	// Kind is "5h", "7d", "30d" or empty for a window of another length.
 	Kind          string    `json:"kind,omitempty"`
 	PeriodSeconds float64   `json:"period_seconds,omitempty"`
 	Remaining     float64   `json:"remaining"`
@@ -290,14 +291,21 @@ type WindowStatus struct {
 
 // GroupStatus is one quota group on the status page.
 type GroupStatus struct {
-	Key         string         `json:"key"`
-	Label       string         `json:"label"`
-	SourceLabel string         `json:"source_label"`
-	Windows     []WindowStatus `json:"windows"`
+	EstimatedCheapestModel   string         `json:"estimated_cheapest_model"`
+	EstimatedCheapestCostUSD float64        `json:"estimated_cheapest_cost_usd"`
+	LastSuccessfulModel      string         `json:"last_successful_model"`
+	ConfirmedModel           string         `json:"confirmed_model"`
+	ManualModel              string         `json:"manual_model"`
+	AvailableModels          []string       `json:"available_models,omitempty"`
+	Key                      string         `json:"key"`
+	Label                    string         `json:"label"`
+	SourceLabel              string         `json:"source_label"`
+	Windows                  []WindowStatus `json:"windows"`
 }
 
 // AccountStatus is one credential on the status page.
 type AccountStatus struct {
+	AuthID    string `json:"auth_id,omitempty"`
 	AuthIndex string `json:"auth_index"`
 	Provider  string `json:"provider"`
 	Title     string `json:"title"`
@@ -321,6 +329,19 @@ type AccountStatus struct {
 	// accounts when account_weights does not set one.
 	Plan          string  `json:"plan,omitempty"`
 	DefaultWeight float64 `json:"default_weight"`
+}
+
+// TargetWindowStatus is the ignition schedule of one observed quota window.
+type TargetWindowStatus struct {
+	ID          string    `json:"id"`
+	Kind        string    `json:"kind"`
+	Class       string    `json:"class"`
+	Enabled     bool      `json:"enabled"`
+	NextDue     time.Time `json:"next_due"`
+	Reset       time.Time `json:"reset"`
+	Rolling     bool      `json:"rolling"`
+	LastSuccess time.Time `json:"last_success"`
+	LastAttempt time.Time `json:"last_attempt"`
 }
 
 // Status is the response of the status endpoint.
@@ -402,6 +423,7 @@ func (e *Engine) Status() Status {
 	cfg.MCPKeySet = cfg.MCPKey != ""
 	cfg.MCPKey = ""
 	cfg.AccountOrder = append([]string(nil), cfg.AccountOrder...)
+	cfg.Ignition.Windows = slices.Clone(cfg.Ignition.Windows)
 	if cfg.BarkURL != "" {
 		cfg.BarkURL = "set"
 	}
@@ -444,6 +466,22 @@ func (e *Engine) Status() Status {
 		Providers:          providerInfos(),
 		GroupOrder:         providers.GroupOrder(),
 	}
+	for i := range status.Targets {
+		status.Targets[i].Windows = slices.Clone(status.Targets[i].Windows)
+	}
+	for _, spec := range providers.All() {
+		if spec.Ignition == nil {
+			continue
+		}
+		if candidates := rankedModels(e.pricingMgr, spec, spec.Ignition.HintGroup, e.availableModels, ""); len(candidates) > 0 {
+			if status.NextModels == nil {
+				status.NextModels = map[string]string{}
+			}
+			status.NextModels[spec.ID] = candidates[0]
+		} else {
+			delete(status.NextModels, spec.ID)
+		}
+	}
 	status.LatestVersion, status.ReleaseURL = e.latest.Version, e.latest.URL
 	_, status.UTCOffset = e.now().In(e.cfg.Location()).Zone()
 	creds := make([]*Cred, 0, len(e.creds))
@@ -475,6 +513,7 @@ func (e *Engine) Status() Status {
 	})
 	for _, cred := range creds {
 		account := AccountStatus{
+			AuthID:      cred.ID,
 			AuthIndex:   cred.AuthIndex,
 			Provider:    cred.Provider,
 			Title:       labelFor(providers.Title(cred.Provider), cred),
@@ -506,6 +545,24 @@ func (e *Engine) Status() Status {
 		}
 		for _, group := range groups {
 			gs := GroupStatus{Key: group.Key, Label: group.Label, SourceLabel: group.SourceLabel}
+			ms := e.modelStates[group.Key]
+			gs.LastSuccessfulModel, gs.ConfirmedModel = ms.LastSuccessfulModel, ms.ConfirmedModel
+			gs.ManualModel = manualModel(cfg, target{group: *group, cred: cred})
+			for _, w := range group.Windows {
+				if providers.Pulseable(group.Provider, group.SourceLabel, w.Window) {
+					gs.AvailableModels = providers.EligibleModels(providers.Lookup(group.Provider), group.SourceLabel, e.availableModels)
+					break
+				}
+			}
+			candidates := []string{}
+			for _, model := range gs.AvailableModels {
+				if at, refused := ms.Refused[model]; gs.ManualModel != "" || !refused || e.now().Sub(at) >= refusedFor {
+					candidates = append(candidates, model)
+				}
+			}
+			if cheapest, ok := e.pricingMgr.Cheapest(group.Provider, candidates, ms.ConfirmedModel); ok {
+				gs.EstimatedCheapestModel, gs.EstimatedCheapestCostUSD = cheapest.ModelID, cheapest.EstimatedPulseUSD
+			}
 			for _, w := range group.Windows {
 				gs.Windows = append(gs.Windows, WindowStatus{
 					ID:            w.ID,
@@ -540,7 +597,7 @@ type Series struct {
 	Group       string `json:"group"`
 	Window      string `json:"window"`
 	WindowLabel string `json:"window_label"`
-	// Kind is "5h", "7d" or empty for a window of another length.
+	// Kind is "5h", "7d", "30d" or empty for a window of another length.
 	Kind        string       `json:"kind,omitempty"`
 	Label       string       `json:"label"`
 	SourceLabel string       `json:"source_label"` // label without the account suffix
@@ -564,16 +621,20 @@ type HistoryResponse struct {
 // plus one, a window plus one, half a day or month (two whole windows), a
 // day or a month, and five windows plus one. See internal/web/page.js.
 var historyRanges = map[string]time.Duration{
-	"1h":  time.Hour,
-	"3h":  3 * time.Hour,
-	"6h":  6 * time.Hour,
-	"12h": 12 * time.Hour,
-	"24h": 24 * time.Hour,
-	"26h": 26 * time.Hour,
-	"4d":  4 * 24 * time.Hour,
-	"8d":  8 * 24 * time.Hour,
-	"15d": 15 * 24 * time.Hour,
-	"36d": 36 * 24 * time.Hour,
+	"1h":   time.Hour,
+	"3h":   3 * time.Hour,
+	"6h":   6 * time.Hour,
+	"12h":  12 * time.Hour,
+	"24h":  24 * time.Hour,
+	"26h":  26 * time.Hour,
+	"4d":   4 * 24 * time.Hour,
+	"8d":   8 * 24 * time.Hour,
+	"15d":  15 * 24 * time.Hour,
+	"36d":  36 * 24 * time.Hour,
+	"31d":  31 * 24 * time.Hour,
+	"61d":  61 * 24 * time.Hour,
+	"90d":  90 * 24 * time.Hour,
+	"151d": 151 * 24 * time.Hour,
 }
 
 // RangeSpan returns the span of a history range, 24 hours for an unknown
@@ -599,6 +660,9 @@ func RangeSpan(name string, now time.Time, loc *time.Location) time.Duration {
 // HistoryRange returns the history for a named range, see RangeSpan, and
 // the windows of one kind, see History.
 func (e *Engine) HistoryRange(name, kind string) (HistoryResponse, error) {
+	if name == "" && kind == quota.KindThirtyDay {
+		name = "31d"
+	}
 	return e.History(RangeSpan(name, e.now(), e.config().Location()), kind)
 }
 
@@ -635,7 +699,7 @@ const historyLead = 24 * time.Hour
 // reduced to the last sample per bucket. Each series also starts with its
 // last sample before the span, within historyLead, so that the chart line
 // reaches the left edge instead of starting at the first sample in the span.
-// With kind "5h" or "7d" only windows of that kind are returned, otherwise
+// With kind "5h", "7d" or "30d" only windows of that kind are returned, otherwise
 // all windows.
 func (e *Engine) History(span time.Duration, kind string) (HistoryResponse, error) {
 	return e.historyContext(context.Background(), span, kind, false, nil)
@@ -775,7 +839,7 @@ func (e *Engine) historyContext(ctx context.Context, span time.Duration, kind st
 			return resp, err
 		}
 	}
-	filter := kind == quota.KindFiveHour || kind == quota.KindSevenDay
+	filter := kind == quota.KindFiveHour || kind == quota.KindSevenDay || kind == quota.KindThirtyDay
 	for _, key := range order {
 		if filter && series[key].Kind != kind {
 			continue

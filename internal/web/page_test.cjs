@@ -320,7 +320,7 @@ test("account cards keep only identity in the heading and place actions after th
     return node;
   };
   const ctx = context(["renderAccounts"], {
-    accountDrag: null, accountsBehind: false, SENSITIVE: "account-sensitive",
+    accountDrag: null, accountsBehind: false, SENSITIVE: "account-sensitive", document: { activeElement: null },
     status: { accounts: [
       { name: "a", provider: "codex", title: "GPT#first", email: "first@example.com", plan: "Pro", groups: [] },
       { name: "b", provider: "codex", title: "GPT#second", email: "second@example.com", groups: [] },
@@ -360,7 +360,7 @@ function settingsSaveContext(radio = false) {
   inputs.forEach((input, i) => { input.type = "number"; input.value = String(i ? 22 : 7); input.checkValidity = () => true; });
   if (radio) inputs.forEach((input, i) => {
     input.type = "radio"; input.value = i ? "all" : "off"; input.checked = !i;
-    input.closest = selector => selector === ".thresholds, .mode-switch" ? { querySelectorAll: () => inputs } : null;
+    input.closest = selector => selector.includes(".mode-switch") ? { querySelectorAll: () => inputs } : null;
   });
   const ctx = context(["saveField", "captureIntent", "buildPatch", "refillSaved", "noteEdit", "inputTop", "topKey", "setPath", "saveControls"], {
     $: () => ({ elements: inputs }), THRESHOLDS: [], saveQueue: Promise.resolve(),
@@ -606,6 +606,7 @@ test("five color levels use raw percentages before display rounding", () => {
 test("window translations have no duplicate definitions", () => {
   assert.equal((source.match(/window_5h:/g) || []).length, 1);
   assert.equal((source.match(/window_7d:/g) || []).length, 1);
+  assert.equal((source.match(/window_30d:/g) || []).length, 1);
   assert.match(source, /window_5h: "5-hour window"/);
 });
 
@@ -1343,4 +1344,1030 @@ test("the client commands quote the address and the key for the shell, and the J
   assert.deepEqual(words(snippets.mcp_claude), ["mcp", "add", "--transport", "http", "cpa-pulse", url, "--header", "Authorization: Bearer " + secret]);
   assert.deepEqual(words(snippets.mcp_stdio), ["mcp-remote", url, "--header", "Authorization: Bearer " + secret]);
   assert.deepEqual(JSON.parse(snippets.mcp_json), { mcpServers: { "cpa-pulse": { type: "http", url, headers: { Authorization: "Bearer " + secret } } } });
+});
+
+function priceNode(tag, attrs = {}, children = []) {
+  attrs = attrs || {};
+  const node = saveNode(tag.toUpperCase(), attrs);
+  node.className = attrs.class || "";
+  node.disabled = !!attrs.disabled;
+  node.hidden = !!attrs.hidden;
+  node.value = attrs.value ?? "";
+  node.events = {};
+  for (const [key, value] of Object.entries(attrs)) {
+    if (key.startsWith("on")) node.events[key.slice(2)] = value;
+  }
+  if (attrs.text !== undefined) node.textContent = String(attrs.text);
+  node.children.push(...children);
+  node.focus = () => { node.focused = true; };
+  node.blur = () => {};
+  node.reportValidity = () => true;
+  return node;
+}
+
+function descendants(node, predicate) {
+  return [node, ...node.children.flatMap(child => descendants(child, predicate))].filter(predicate);
+}
+
+function pricingContext(extraNames = [], globals = {}) {
+  const nodes = {};
+  const $ = id => nodes[id] || (nodes[id] = priceNode("div"));
+  $("prices-scope").value = "cpa";
+  const entries = [
+    { provider: "anthropic", model: "haiku", has_price: true, input_usd_per_million: 1, output_usd_per_million: 5, estimated_pulse_usd: 0.000042, cpa_relevant: true, available_in_cpa: true, eligible: true },
+    { provider: "openai", model: "custom", has_price: true, input_usd_per_million: 0, output_usd_per_million: 2, estimated_pulse_usd: 0, available_in_cpa: true, custom: true, eligible: true },
+    { provider: "openai", model: "removed", has_price: true, cpa_relevant: true, custom: true, disabled: true, eligible: false },
+    { provider: "anthropic", model: "unpriced", cpa_relevant: true, eligible: false, reason: "No price" },
+    { provider: "catalog", model: "other", has_price: true, eligible: false, reason: "Unavailable" },
+  ];
+  const names = ["priceUSD", "filteredPrices", "priceProvider", "priceConfirmed", "priceBadges", "renderPrices", "priceRefreshPaused", "stopPricePolling", "pollPriceRefresh", ...extraNames];
+  const ctx = context(names, {
+    $, document: { activeElement: null }, prices: { source: "models.dev", fetched_at: "2026-11-25T00:00:00Z", refresh_hours: 24, entries },
+    pricesBusy: false, pricesLoading: false, pricesError: "", priceEditing: null, priceEditorDirty: false, rawConfig: {},
+    pricesPollTimer: null, pricesPollUntil: 0, setTimeout: () => 1, clearTimeout() {},
+    status: { targets: [{ key: "g" }], accounts: [{ provider: "claude", groups: [{ confirmed_model: "haiku" }] }] },
+    el: priceNode, clear: node => { node.children = []; node.text = ""; },
+    badge: (kind, text) => priceNode("span", { class: "badge badge-" + kind, text }),
+    parseTime: value => value ? Date.parse(value) : null, fmtDateTime: value => new Date(value).toISOString(),
+    editPrice: () => {}, togglePrice: () => {}, resetPrice: () => {},
+    ...globals,
+  });
+  return { ctx, nodes, $, entries };
+}
+
+test("prices render CPA models by default, with fetched, custom, removed, confirmed and ineligible badges", () => {
+  const { ctx, $ } = pricingContext();
+  ctx.renderPrices();
+  const table = $("prices-rows").textContent;
+  assert.match(table, /haiku.*\$1.*\$5.*\$0\.000042.*FetchedConfirmed/);
+  assert.match(table, /custom.*\$0.*Custom/);
+  assert.match(table, /removed.*CustomRemoved.*RestoreReset/);
+  assert.match(table, /unpricedUnpricedUnpriced—FetchedIneligible: No price/);
+  assert.doesNotMatch(table, /catalog|other/);
+  assert.equal($("prices-count").textContent, "4 of 5 models");
+  assert.match($("prices-meta").textContent, /models.dev.*2026-11-25/);
+  assert.equal($("prices-interval").value, 24);
+});
+
+test("confirmed price badges require CPA relevance, availability and the confirming provider family", () => {
+  const { ctx, entries } = pricingContext();
+  const entry = entries[0];
+  assert.equal(ctx.priceConfirmed(entry), true);
+  for (const changes of [
+    { provider: "reseller", cpa_relevant: false }, { cpa_relevant: undefined },
+    { available_in_cpa: false }, { available_in_cpa: undefined }, { provider: "openai" },
+    { model: "different" },
+  ]) {
+    const row = { ...entry, ...changes };
+    assert.equal(ctx.priceConfirmed(row), false, JSON.stringify(changes));
+    assert.equal(ctx.priceBadges(row).some(node => node.textContent === "Confirmed"), false);
+  }
+  for (const [accountProvider, catalogProvider, model] of [
+    ["codex", "openai", "gpt-test"], ["claude", "anthropic", "claude-test"],
+    ["antigravity", "anthropic", "claude-test"], ["antigravity", "google", "gemini-test"],
+    ["antigravity", "openai", "gpt-test"], ["Antigravity", "openai", "GPT-test"],
+    ["gemini", "google", "gemini-test"], ["kimi", "moonshotai", "kimi-test"], ["grok", "xai", "grok-test"],
+  ]) {
+    ctx.status.accounts = [{ provider: accountProvider, groups: [{ confirmed_model: model }] }];
+    assert.equal(ctx.priceConfirmed({ ...entry, provider: catalogProvider, model }), true);
+    assert.equal(ctx.priceBadges({ ...entry, provider: catalogProvider, model }).some(node => node.textContent === "Confirmed"), true);
+    assert.equal(ctx.priceConfirmed({ ...entry, provider: "reseller", model }), false);
+  }
+});
+
+test("All Catalog Models and instant search filter rendered prices by provider or model", () => {
+  const { ctx, $ } = pricingContext();
+  $("prices-scope").value = "all";
+  ctx.renderPrices();
+  assert.match($("prices-rows").textContent, /catalogother.*Ineligible: Unavailable/);
+  $("prices-search").value = "  ANTHROPIC ";
+  ctx.renderPrices();
+  assert.equal($("prices-rows").children.length, 2);
+  $("prices-search").value = "OTHER";
+  ctx.renderPrices();
+  assert.equal($("prices-rows").children.length, 1);
+  assert.match($("prices-rows").textContent, /catalogother/);
+  $("prices-search").value = "missing";
+  ctx.renderPrices();
+  assert.match($("prices-rows").textContent, /No models match/);
+  assert.match(source, /\$\("prices-search"\)\.addEventListener\("input", renderPrices\)/);
+});
+
+test("prices preserve zero, missing prices, refresh state, errors and a refresh interval draft", () => {
+  const { ctx, $ } = pricingContext();
+  ctx.prices.refreshing = true;
+  ctx.prices.last_error = "Catalog unavailable; cached prices kept";
+  ctx.document.activeElement = $("prices-interval");
+  $("prices-interval").value = "12";
+  ctx.renderPrices();
+  assert.equal($("prices-refresh").disabled, true);
+  assert.match($("prices-meta").textContent, /Refresh in progress/);
+  assert.equal($("prices-error").hidden, false);
+  assert.match($("prices-error").textContent, /cached prices kept/);
+  assert.equal($("prices-interval").value, "12");
+  assert.equal(ctx.priceUSD(0), "$0");
+  assert.equal(ctx.priceUSD(undefined), "—");
+  assert.equal(ctx.priceUSD(-1), "—");
+  assert.equal(ctx.priceUSD(1e-10), "$1.00e-10");
+});
+
+test("prices cap filtered matches at 200 and show a hint only when more models match", () => {
+  const { ctx, $ } = pricingContext();
+  ctx.prices.entries = Array.from({ length: 250 }, (_, i) => ({
+    provider: "catalog", model: "model-" + i, cpa_relevant: i < 5, eligible: true,
+  }));
+  ctx.renderPrices();
+  assert.equal($("prices-rows").children.length, 5);
+  assert.equal($("prices-limit").hidden, true);
+  $("prices-scope").value = "all";
+  ctx.renderPrices();
+  assert.equal($("prices-rows").children.length, 200);
+  assert.equal($("prices-count").textContent, "250 of 250 models");
+  assert.equal($("prices-limit").hidden, false);
+  assert.equal($("prices-limit").textContent, "Showing 200 of 250 models — narrow your search to see more");
+  $("prices-search").value = "model-249";
+  ctx.renderPrices();
+  assert.equal($("prices-rows").children.length, 1);
+  assert.match($("prices-rows").textContent, /model-249/);
+  assert.equal($("prices-limit").hidden, true);
+  assert.equal($("prices-limit").textContent, "");
+  $("prices-search").value = "";
+  $("prices-scope").value = "cpa";
+  ctx.prices.entries.forEach(entry => { entry.cpa_relevant = true; });
+  ctx.renderPrices();
+  assert.equal($("prices-rows").children.length, 200);
+  assert.equal($("prices-limit").hidden, false);
+});
+
+test("prices keep catalog strings as literal DOM text and attributes", () => {
+  const { ctx, $ } = pricingContext(["el", "badge"]);
+  ctx.document.createElement = tag => {
+    const node = priceNode(tag);
+    node.addEventListener = (name, callback) => { node.events[name] = callback; };
+    Object.defineProperty(node, "innerHTML", { set() { assert.fail("catalog strings must not enter the HTML parser"); } });
+    return node;
+  };
+  ctx.document.createTextNode = text => priceNode("#text", { text });
+  const payload = '\"><img src=x onerror=alert(1)>&\'';
+  ctx.prices.source = payload;
+  ctx.prices.last_error = payload;
+  ctx.prices.entries = [{ provider: payload, model: payload, reason: payload, cpa_relevant: true }];
+  ctx.renderPrices();
+  assert.ok($("prices-meta").textContent.includes(payload));
+  assert.equal($("prices-error").textContent, payload);
+  const row = $("prices-rows").children[0];
+  assert.equal(row.children[0].children[0].children[0].textContent, payload);
+  assert.equal(row.children[0].children[0].children[1].textContent, payload);
+  assert.ok(row.children[4].textContent.includes("Ineligible: " + payload));
+  assert.equal(descendants(row, node => node.tagName === "BUTTON")[0].getAttribute("aria-label"), "Edit " + payload);
+  assert.equal(descendants(row, node => node.tagName === "IMG").length, 0);
+});
+
+test("prices table buttons open the editor and dispatch remove, restore and reset", () => {
+  const actions = [];
+  const { ctx, $, entries } = pricingContext([], {
+    editPrice: entry => actions.push(["edit", entry.model]),
+    togglePrice: entry => actions.push(["toggle", entry.model]),
+    resetPrice: entry => actions.push(["reset", entry.model]),
+  });
+  ctx.renderPrices();
+  for (const row of $("prices-rows").children) {
+    for (const button of descendants(row, node => node.tagName === "BUTTON")) button.events.click();
+  }
+  assert.deepEqual(actions, [["edit", "haiku"], ["toggle", "haiku"], ["edit", "custom"], ["toggle", "custom"], ["reset", "custom"],
+    ["edit", "removed"], ["toggle", "removed"], ["reset", "removed"], ["edit", "unpriced"], ["toggle", "unpriced"]]);
+});
+
+const priceMutationFunctions = ["mutatePrice", "loadPrices", "refreshPrices", "togglePrice", "resetPrice"];
+
+function pricePollingContext(globals = {}) {
+  let now = 1000, serial = 0;
+  const timers = new Map();
+  const result = pricingContext([...priceMutationFunctions, "showView"], {
+    Date: { now: () => now }, VIEW_STORE: "view", key: "key", history: null,
+    localStorage: { setItem() {} }, pressSegment() {},
+    setTimeout: (callback, delay) => { assert.equal(delay, 1000); timers.set(++serial, callback); return serial; },
+    clearTimeout: id => timers.delete(id),
+    ...globals,
+  });
+  return { ...result, timers, advance: async () => {
+    assert.equal(timers.size, 1);
+    const [id, callback] = timers.entries().next().value;
+    timers.delete(id); now += 1000;
+    await callback();
+  }, setTime: value => { now = value; } };
+}
+
+test("price refresh polls every second until completion and immediately enables the button", async () => {
+  const calls = [];
+  let reads = 0;
+  const { ctx, $, timers, advance } = pricePollingContext({
+    API: "/api", api: async (method, url) => {
+      calls.push([method, url]);
+      return { entries: [], refreshing: method === "POST" || ++reads < 3 };
+    },
+  });
+  await ctx.refreshPrices();
+  assert.equal($("prices-refresh").disabled, true);
+  await advance();
+  assert.equal($("prices-refresh").disabled, true);
+  await advance();
+  assert.equal($("prices-refresh").disabled, false);
+  assert.equal($("prices-refresh").textContent, "Refresh Prices");
+  assert.equal(timers.size, 0);
+  assert.deepEqual(calls, [["POST", "/api/prices/refresh"], ...Array.from({ length: 3 }, () => ["GET", "/api/prices"])]);
+});
+
+test("price refresh polling stops on view exit, page hide, hidden documents and after two minutes", async () => {
+  const { ctx, $, timers, advance, setTime } = pricePollingContext({
+    API: "/api", api: async () => ({ entries: [], refreshing: true }),
+  });
+  await ctx.loadPrices();
+  ctx.showView("settings");
+  assert.equal(timers.size, 0);
+  $("view-prices").hidden = false;
+  await ctx.loadPrices();
+  const windowEvents = {};
+  ctx.window = { addEventListener: (name, fn) => { windowEvents[name] = fn; } };
+  vm.runInContext(source.match(/  window.addEventListener\("pagehide", stopPricePolling\);/)[0], ctx);
+  windowEvents.pagehide();
+  assert.equal(timers.size, 0);
+  await ctx.loadPrices();
+  ctx.document.hidden = true;
+  await advance();
+  assert.equal(timers.size, 0);
+  ctx.document.hidden = false;
+  await ctx.loadPrices();
+  setTime(ctx.pricesPollUntil);
+  await advance();
+  assert.equal(timers.size, 0);
+});
+
+test("price refresh polling respects edits and retries while a request is in flight", async () => {
+  let reads = 0, reply;
+  const { ctx, timers, advance } = pricePollingContext({
+    API: "/api", api: () => { reads++; return new Promise(resolve => { reply = resolve; }); },
+  });
+  ctx.prices.refreshing = true;
+  ctx.priceEditorDirty = true;
+  ctx.pollPriceRefresh();
+  await advance();
+  assert.equal(reads, 0);
+  ctx.priceEditorDirty = false;
+  const request = ctx.loadPrices();
+  await advance();
+  assert.equal(reads, 1);
+  assert.equal(timers.size, 1);
+  reply({ entries: [], refreshing: false });
+  await request;
+  assert.equal(timers.size, 0);
+});
+
+test("Refresh Prices posts once, then reads refresh status with the existing API helper", async () => {
+  const calls = [];
+  const { ctx, $ } = pricingContext(priceMutationFunctions, {
+    API: "/api", api: async (...args) => {
+      calls.push(plain(args));
+      return args[0] === "POST" ? { ok: true, refreshing: true } : { source: "models.dev", entries: [], refreshing: true };
+    },
+  });
+  const request = ctx.refreshPrices();
+  assert.equal($("prices-refresh").disabled, true);
+  await ctx.refreshPrices();
+  await request;
+  assert.deepEqual(calls, [["POST", "/api/prices/refresh", {}], ["GET", "/api/prices"]]);
+  assert.equal($("prices-refresh").disabled, true);
+  assert.equal($("price-save").disabled, false);
+});
+
+test("fetched Remove omits prices, Restore deletes its tombstone, and Reset encodes its identity", async () => {
+  const calls = [];
+  const { ctx, entries } = pricingContext(priceMutationFunctions, {
+    API: "/api", api: async (...args) => { calls.push(plain(args)); return { entries: [] }; },
+  });
+  await ctx.togglePrice(entries[0]);
+  assert.deepEqual(calls[0], ["PUT", "/api/prices/override", { provider: "anthropic", model: "haiku", disabled: true }]);
+  await ctx.togglePrice({ ...entries[0], disabled: true });
+  assert.deepEqual(calls[1], ["DELETE", "/api/prices/override?provider=anthropic&model=haiku", null]);
+  await ctx.resetPrice({ provider: "a/b", model: "m +&?" });
+  assert.equal(calls[2][0], "DELETE");
+  assert.equal(calls[2][1], "/api/prices/override?provider=a%2Fb&model=m%20%2B%26%3F");
+});
+
+test("custom Remove and Restore retain custom prices, including zero", async () => {
+  const calls = [];
+  const { ctx, entries } = pricingContext(priceMutationFunctions, {
+    API: "/api", api: async (...args) => { calls.push(plain(args)); return { entries: [] }; },
+  });
+  for (const disabled of [false, true]) {
+    await ctx.togglePrice({ ...entries[1], disabled });
+    assert.deepEqual(calls.at(-1), ["PUT", "/api/prices/override", {
+      provider: "openai", model: "custom", disabled: !disabled, input_usd_per_million: 0, output_usd_per_million: 2,
+    }]);
+  }
+});
+
+test("a price request failure keeps cached rows, reports the error and enables retry", async () => {
+  const { ctx, $ } = pricingContext(priceMutationFunctions, {
+    API: "/api", api: async () => { throw new Error("offline"); },
+  });
+  assert.equal(await ctx.togglePrice(ctx.prices.entries[0]), false);
+  assert.match($("prices-error").textContent, /Could not update prices: offline/);
+  assert.equal($("prices-refresh").disabled, false);
+  assert.match($("prices-rows").textContent, /haiku/);
+  await ctx.loadPrices();
+  assert.match($("prices-error").textContent, /Could not load prices: offline/);
+  assert.equal(ctx.prices.entries.length, 5);
+});
+
+function priceForm() {
+  const form = priceNode("form");
+  form.elements = Object.fromEntries(["provider", "model", "input", "output"].map(name => [name, priceNode("input")]));
+  form.reset = () => Object.values(form.elements).forEach(field => { field.value = ""; });
+  return form;
+}
+
+test("30-second price auto-refresh pauses for search focus, an edited model and unsaved custom input", async () => {
+  let calls = 0, tick;
+  const form = priceForm();
+  const { ctx, $, entries } = pricingContext([...priceMutationFunctions, "editPrice", "clearPriceEditor"], {
+    API: "/api", api: async () => { calls++; return { entries }; },
+  });
+  const original = ctx.$;
+  ctx.$ = id => id === "price-editor" ? form : original(id);
+  ctx.setInterval = (callback, delay) => { assert.equal(delay, 30000); tick = callback; };
+  ctx.loadStatus = async () => {};
+  ctx.refreshHistory = () => {};
+  vm.runInContext(source.match(/refreshTimer = setInterval\(function \(\) \{[^]*?\}, 30000\);/)[0], ctx);
+  const refresh = async () => { tick(); await new Promise(resolve => setImmediate(resolve)); };
+  await refresh();
+  assert.equal(calls, 1);
+  ctx.document.activeElement = $("prices-search");
+  await refresh();
+  assert.equal(calls, 1);
+  ctx.document.activeElement = null;
+  ctx.editPrice(entries[0]);
+  await refresh();
+  assert.equal(calls, 1);
+  ctx.clearPriceEditor();
+  const listener = source.match(/\$\("price-editor"\)\.addEventListener\("input", function \(\) \{[^]*?\}\);/);
+  assert.ok(listener);
+  form.addEventListener = (name, callback) => { form.events[name] = callback; };
+  vm.runInContext(listener[0], ctx);
+  form.elements.provider.value = "draft";
+  form.events.input();
+  await refresh();
+  assert.equal(calls, 1);
+  ctx.clearPriceEditor();
+  await refresh();
+  assert.equal(calls, 2);
+});
+
+test("in-flight price reloads discard responses during editing or search", async () => {
+  for (const interaction of ["edit", "draft", "search"]) {
+    let finish;
+    const form = priceForm();
+    const { ctx, $, entries } = pricingContext([...priceMutationFunctions, "editPrice", "clearPriceEditor"], {
+      API: "/api", api: () => new Promise(resolve => { finish = resolve; }),
+    });
+    const original = ctx.$;
+    ctx.$ = id => id === "price-editor" ? form : original(id);
+    const cached = ctx.prices;
+    const pending = ctx.loadPrices();
+    if (interaction === "edit") {
+      ctx.editPrice(entries[0]);
+      form.elements.input.value = "9";
+    } else if (interaction === "draft") ctx.priceEditorDirty = true;
+    else ctx.document.activeElement = $("prices-search");
+    finish({ entries: [{ provider: "new", model: "new" }] });
+    await pending;
+    assert.equal(ctx.prices, cached, interaction);
+    assert.equal(ctx.pricesLoading, false);
+    if (interaction === "edit") assert.equal(form.elements.input.value, "9");
+    ctx.document.activeElement = null;
+    ctx.clearPriceEditor();
+    const resumed = ctx.loadPrices();
+    finish({ entries: [] });
+    await resumed;
+    assert.equal(ctx.prices.entries.length, 0);
+  }
+});
+
+test("saving an edited removed model preserves its disabled state", async () => {
+  for (const custom of [false, true]) {
+    const calls = [], form = priceForm();
+    const { ctx, entries } = pricingContext([...priceMutationFunctions, "editPrice", "clearPriceEditor", "savePrice"], {
+      API: "/api", api: async (...args) => { calls.push(plain(args)); return { entries: [] }; },
+    });
+    const original = ctx.$;
+    ctx.$ = id => id === "price-editor" ? form : original(id);
+    ctx.editPrice({ ...entries[0], disabled: true, custom });
+    form.elements.input.value = "2";
+    assert.equal(await ctx.savePrice({ preventDefault() {} }), true);
+    assert.deepEqual(calls[0], ["PUT", "/api/prices/override", {
+      provider: "anthropic", model: "haiku", input_usd_per_million: 2, output_usd_per_million: 5, disabled: true,
+    }]);
+    assert.equal(ctx.priceEditing, null);
+    assert.equal(ctx.priceEditorDirty, false);
+  }
+});
+
+test("Edit fills a compact price form and saves a numeric override; custom prices accept zero", async () => {
+  const calls = [], form = priceForm();
+  const { ctx, $, entries } = pricingContext([...priceMutationFunctions, "editPrice", "clearPriceEditor", "savePrice"], {
+    API: "/api", api: async (...args) => { calls.push(plain(args)); return { entries: [] }; },
+  });
+  const nodes = { "price-editor": form };
+  const original = ctx.$;
+  ctx.$ = id => nodes[id] || original(id);
+  ctx.editPrice(entries[0]);
+  assert.equal(form.elements.provider.value, "anthropic");
+  assert.equal(form.elements.input.value, 1);
+  assert.equal(form.elements.input.focused, true);
+  assert.equal(form.elements.model.readOnly, true);
+  form.elements.output.value = "7.5";
+  let prevented = false;
+  assert.equal(await ctx.savePrice({ preventDefault: () => { prevented = true; } }), true);
+  assert.equal(prevented, true);
+  assert.deepEqual(calls[0][2], { provider: "anthropic", model: "haiku", input_usd_per_million: 1, output_usd_per_million: 7.5, disabled: false });
+  assert.equal(form.elements.model.readOnly, false);
+  form.elements.provider.value = " custom "; form.elements.model.value = " unpriced ";
+  form.elements.input.value = "0"; form.elements.output.value = "0";
+  await ctx.savePrice({ preventDefault() {} });
+  assert.equal(calls[1][2].input_usd_per_million, 0);
+  assert.equal(calls[1][2].model, "unpriced");
+  assert.match($("prices-save-state").textContent, /Price saved/);
+});
+
+test("invalid prices never save, and a rejected price keeps the editor draft", async () => {
+  const form = priceForm(); let calls = 0;
+  const { ctx, $ } = pricingContext([...priceMutationFunctions, "clearPriceEditor", "savePrice"], {
+    API: "/api", api: async () => { calls++; throw new Error("rejected"); },
+  });
+  const original = ctx.$; ctx.$ = id => id === "price-editor" ? form : original(id);
+  form.elements.provider.value = "p"; form.elements.model.value = "m";
+  form.elements.input.value = "-1"; form.elements.output.value = "1";
+  await ctx.savePrice({ preventDefault() {} });
+  assert.equal(calls, 0);
+  assert.equal($("price-editor-error").hidden, false);
+  form.elements.input.value = "0.5";
+  await ctx.savePrice({ preventDefault() {} });
+  assert.equal(calls, 1);
+  assert.equal(form.elements.input.value, "0.5");
+  assert.match($("prices-error").textContent, /rejected/);
+});
+
+test("refresh interval uses queued config patches, preserves pricing settings and supports manual only", async () => {
+  const writes = [];
+  const { ctx, $ } = pricingContext(["savePriceInterval"], {
+    rawConfig: { pricing: { extra: true } }, saveQueue: Promise.resolve(), whenApplied: async () => true,
+    patchConfig: async patch => { writes.push(plain(patch)); return "token"; },
+  });
+  $("prices-interval").value = "0";
+  await ctx.savePriceInterval();
+  assert.deepEqual(writes, [{ pricing: { extra: true, refresh_hours: 0 } }]);
+  assert.match($("prices-save-state").textContent, /saved/);
+  $("prices-interval").value = "169";
+  await ctx.savePriceInterval();
+  $("prices-interval").value = "1.5";
+  await ctx.savePriceInterval();
+  $("prices-interval").value = "";
+  await ctx.savePriceInterval();
+  assert.equal(writes.length, 1);
+});
+
+test("account pulse badges distinguish estimated, confirmed cheapest and manual overrides", () => {
+  const { ctx } = pricingContext(["pulseModelInfo", "accountModelKey", "pulseModelControl"], { modelSaves: {} });
+  const account = { auth_id: "auth" }, base = { key: "g", available_models: ["cheap", "other"], estimated_cheapest_model: "cheap", estimated_cheapest_cost_usd: 0.000042 };
+  let node = ctx.pulseModelControl(account, base);
+  assert.match(node.textContent, /Estimated cheapestcheapEst. pulse: \$0.000042Pulse modelAuto \(Cheapest\)/);
+  node = ctx.pulseModelControl(account, { ...base, confirmed_model: "cheap" });
+  assert.match(node.textContent, /Confirmed cheapest/);
+  node = ctx.pulseModelControl(account, { ...base, confirmed_model: "other" });
+  assert.match(node.textContent, /Estimated cheapest/);
+  node = ctx.pulseModelControl(account, { ...base, confirmed_model: "cheap", manual_model: "manual", last_successful_model: "other" });
+  assert.match(node.textContent, /Manual overridemanualLast successful: other/);
+  assert.doesNotMatch(node.textContent, /Confirmed cheapest/);
+  assert.equal(descendants(node, node => node.tagName === "SELECT")[0].value, "manual");
+  assert.equal(ctx.pulseModelControl(account, { key: "old-server" }), null);
+});
+
+test("account pulse selector lists available models and dispatches its account and group", () => {
+  const calls = [], account = { auth_id: "auth" }, group = { key: "g", available_models: ["a", "b", "a"] };
+  const { ctx } = pricingContext(["pulseModelInfo", "accountModelKey", "pulseModelControl"], {
+    modelSaves: {}, saveAccountModel: (...args) => calls.push(args),
+  });
+  const control = ctx.pulseModelControl(account, group);
+  const select = descendants(control, node => node.tagName === "SELECT")[0];
+  assert.equal(select.children.length, 3);
+  assert.equal(select.value, "");
+  select.value = "b"; select.events.change();
+  assert.deepEqual(calls, [[account, group, "b"]]);
+  assert.match(source, /var modelControl = pulseModelControl\(account, group\);/);
+});
+
+test("pulse model selectors require a matching target and at least one available model", () => {
+  const { ctx } = pricingContext(["pulseModelInfo", "accountModelKey", "pulseModelControl"], { modelSaves: {} });
+  const group = { key: "g", available_models: ["model"] };
+  assert.ok(ctx.pulseModelControl({ provider: "codex" }, group));
+  for (const available_models of [undefined, null, [], "model"]) {
+    assert.equal(ctx.pulseModelControl({ provider: "codex" }, { ...group, available_models }), null);
+  }
+  for (const provider of ["kimi", "xai", "grok", "codex"]) {
+    assert.equal(ctx.pulseModelControl({ provider }, { ...group, key: "monitor-only" }), null);
+  }
+  ctx.status.targets = [];
+  assert.equal(ctx.pulseModelControl({ provider: "claude" }, group), null);
+  delete ctx.status.targets;
+  assert.equal(ctx.pulseModelControl({ provider: "claude" }, group), null);
+});
+
+test("queued account model changes preserve other overrides and Auto removes only the chosen group", async () => {
+  const writes = [];
+  const { ctx } = pricingContext(["accountModelKey", "saveAccountModel"], {
+    modelSaves: {}, rawConfig: { account_models: { existing: { g: "stay" }, auth: { other: "keep" } } },
+    saveQueue: Promise.resolve(), renderAccounts() {}, whenApplied: async () => true, loadStatus: async () => {},
+    patchConfig: async patch => { writes.push(plain(patch)); return "token"; },
+  });
+  const account = { auth_id: "auth", auth_index: "index", name: "name" }, group = { key: "g" };
+  const a = ctx.saveAccountModel(account, group, "cheap");
+  const b = ctx.saveAccountModel({ auth_id: "second" }, group, "other");
+  await Promise.all([a, b]);
+  assert.deepEqual(writes[1].account_models, { existing: { g: "stay" }, auth: { other: "keep", g: "cheap" }, second: { g: "other" } });
+  await ctx.saveAccountModel(account, group, "");
+  assert.equal(writes[2].account_models.auth.g, "");
+  assert.deepEqual(plain(ctx.rawConfig.account_models.auth), { other: "keep" });
+  assert.equal(Object.keys(ctx.modelSaves).length, 0);
+});
+
+test("account model save errors and delayed application stay visible and allow retry", async () => {
+  const { ctx } = pricingContext(["accountModelKey", "saveAccountModel"], {
+    modelSaves: {}, saveQueue: Promise.resolve(), renderAccounts() {}, whenApplied: async () => false,
+    patchConfig: async () => { throw new Error("offline"); },
+  });
+  const account = { auth_index: "index" }, group = { key: "g", manual_model: "old" };
+  await ctx.saveAccountModel(account, group, "new");
+  const key = ctx.accountModelKey(account, group);
+  assert.equal(ctx.modelSaves[key].pending, false);
+  assert.equal(ctx.modelSaves[key].value, "old");
+  assert.match(ctx.modelSaves[key].message, /offline/);
+  ctx.patchConfig = async () => "token";
+  await ctx.saveAccountModel(account, group, "new");
+  assert.match(ctx.modelSaves[key].message, /waiting for the plugin/);
+  assert.equal(ctx.modelSaves[key].pending, false);
+});
+
+test("pricing view navigation preserves existing settings and only draws visible charts", () => {
+  const nodes = Object.fromEntries(["quota", "settings", "prices"].map(view => ["view-" + view, {}]));
+  const pressed = [], stored = {}, loaded = [], charts = [];
+  const ctx = context(["showView"], {
+    $: id => nodes[id], VIEW_STORE: "view", key: "key", history: {}, status: {},
+    localStorage: { setItem: (key, value) => { stored[key] = value; } },
+    pressSegment: (...args) => pressed.push(args), renderChart: () => charts.push(true), loadPrices: () => loaded.push(true), stopPricePolling() {},
+  });
+  ctx.showView("prices", true);
+  assert.equal(nodes["view-prices"].hidden, false);
+  assert.equal(nodes["view-quota"].hidden, true);
+  assert.equal(nodes["view-settings"].hidden, true);
+  assert.equal(loaded.length, 1);
+  assert.equal(charts.length, 0);
+  ctx.showView("settings");
+  assert.equal(nodes["view-settings"].hidden, false);
+  ctx.showView("invalid");
+  assert.equal(nodes["view-quota"].hidden, false);
+  assert.equal(charts.length, 1);
+  assert.equal(stored.view, "quota");
+});
+
+function windowContext(names, globals = {}) {
+  const ctx = context(["translate", ...names], globals);
+  vm.runInContext(source.slice(source.indexOf("  var I18N ="), source.indexOf("\n  function translate(")), ctx);
+  for (const name of ["RANGES", "DEFAULT_RANGE", "WINDOW_SECONDS"]) {
+    vm.runInContext(source.match(new RegExp("  var " + name + " = [^]*?;"))[0], ctx);
+  }
+  return ctx;
+}
+
+test("Restore on a removed unpriced model deletes its override and keeps the model unpriced", async () => {
+  const calls = [];
+  const { ctx } = pricingContext(priceMutationFunctions, {
+    API: "/api", api: async (...args) => { calls.push(plain(args)); return { entries: [{ provider: "a/b", model: "m +&?", has_price: false }] }; },
+  });
+  assert.equal(await ctx.togglePrice({ provider: "a/b", model: "m +&?", disabled: true, has_price: false }), true);
+  assert.deepEqual(calls, [["DELETE", "/api/prices/override?provider=a%2Fb&model=m%20%2B%26%3F", null]]);
+  assert.equal(ctx.prices.entries[0].has_price, false);
+  await ctx.togglePrice({ provider: "p", model: "m", has_price: false });
+  assert.deepEqual(calls[1], ["PUT", "/api/prices/override", { provider: "p", model: "m", disabled: true }]);
+});
+
+function windowSettingsContext() {
+  const checks = ["short", "long"].map(value => {
+    const input = priceNode("input", { name: "ignition.windows", value });
+    input.type = "checkbox";
+    return input;
+  });
+  const group = { querySelectorAll: () => checks };
+  checks.forEach(input => { input.closest = selector => selector.includes(".window-checks") ? group : null; });
+  const other = priceNode("input", { name: "ignition.start_hour", value: "7" });
+  other.type = "number";
+  const inputs = checks.concat(other);
+  const ctx = context(["fillInput", "getPath", "setPath", "topKey", "inputTop", "captureIntent", "buildPatch", "noteEdit", "saveControls"], {
+    $: () => ({ elements: inputs }), rawConfig: { ignition: { hidden_option: "keep", start_hour: 8 } },
+    status: { config: { ignition: { windows: ["short", "long"] } } },
+  });
+  return { ctx, checks, inputs };
+}
+
+test("ignition window settings load defaults, null, empty and each explicit class selection", () => {
+  const { ctx, checks } = windowSettingsContext();
+  const cases = [[{}, [true, true]], [{ windows: null }, [true, true]], [{ windows: [] }, [false, false]],
+    [{ windows: ["short"] }, [true, false]], [{ windows: ["long"] }, [false, true]], [{ windows: ["short", "long"] }, [true, true]]];
+  for (const [ignition, expected] of cases) {
+    checks.forEach(input => { input.checked = !expected[checks.indexOf(input)]; ctx.fillInput(input, { ignition }); });
+    assert.deepEqual(checks.map(input => input.checked), expected);
+    const patch = plain(ctx.buildPatch("ignition"));
+    assert.deepEqual(patch.ignition.windows, ["short", "long"].filter((value, i) => expected[i]));
+    assert.equal(patch.ignition.hidden_option, "keep");
+    assert.equal(patch.ignition.start_hour, 7);
+  }
+  checks.forEach(input => ctx.fillInput(input, {}));
+  assert.ok(checks.every(input => input.checked));
+  const html = fs.readFileSync(path.join(__dirname, "page.html"), "utf8");
+  assert.match(html, /name="ignition.windows" type="checkbox" value="short" checked/);
+  assert.match(html, /name="ignition.windows" type="checkbox" value="long" checked/);
+  assert.match(html, /Short windows \(5h\)/);
+  assert.match(html, /Long windows \(7d \/ 30d\)/);
+});
+
+test("explicit empty ignition windows survive status and config JSON and leave both choices unchecked", () => {
+  const { checks } = windowSettingsContext();
+  const ctx = context(["effectiveConfig", "fillInput", "getPath"], {
+    status: JSON.parse('{"config":{"ignition":{"windows":[]}}}'),
+    rawConfig: JSON.parse('{"ignition":{"windows":[]}}'), MCP_LISTEN: "127.0.0.1:8318",
+  });
+  const effective = ctx.effectiveConfig();
+  assert.deepEqual(plain(effective.ignition.windows), []);
+  for (const check of checks) {
+    check.checked = true;
+    ctx.fillInput(check, effective);
+  }
+  assert.deepEqual(checks.map(check => check.checked), [false, false]);
+});
+
+test("queued ignition window saves keep their captured selections and peer edit generations", () => {
+  const { ctx, checks } = windowSettingsContext();
+  checks[0].checked = true; checks[1].checked = false;
+  ctx.noteEdit(checks[0]);
+  const first = ctx.captureIntent(["ignition"]);
+  checks[0].checked = false; checks[1].checked = true;
+  ctx.noteEdit(checks[1]);
+  const second = ctx.captureIntent(["ignition"]);
+  assert.deepEqual(plain(ctx.buildPatch("ignition", first)).ignition.windows, ["short"]);
+  assert.deepEqual(plain(ctx.buildPatch("ignition", second)).ignition.windows, ["long"]);
+  assert.equal(first.submitted.includes(checks[0]), true);
+  assert.equal(first.submitted.includes(checks[1]), true);
+  assert.equal(second.states[0].edit, first.states[0].edit + 1);
+  assert.equal(second.states[1].edit, first.states[1].edit + 1);
+});
+
+function pulseWindowsContext(extraNames = [], globals = {}) {
+  return windowContext(["parseTime", "targetStatus", "pulseWindowStatus", "pulseWindowControl", ...extraNames], {
+    status: { targets: [] }, el: priceNode,
+    badge: (kind, text) => priceNode("span", { class: "badge badge-" + kind, text }),
+    maskedNodes: text => [priceNode("span", { text })],
+    fmtDateTime: time => time.toISOString(), fmtDateTimeDay: time => time.toISOString(), fmtIn: () => "in 1 h",
+    ...globals,
+  });
+}
+
+test("window badges show active, due, awaiting confirmation and disabled with target failure precedence", () => {
+  const ctx = pulseWindowsContext(), future = new Date(Date.now() + DAY * 1000).toISOString();
+  const past = new Date(Date.now() - DAY * 1000).toISOString();
+  const active = { enabled: true, next_due: future, reset: future };
+  assert.equal(ctx.pulseWindowStatus(active, {}).text, "Active");
+  assert.equal(ctx.pulseWindowStatus({ ...active, next_due: past }, {}).text, "Due");
+  assert.equal(ctx.pulseWindowStatus({ enabled: true, rolling: true }, {}).text, "Due");
+  assert.equal(ctx.pulseWindowStatus({ enabled: true, reset: past }, {}).text, "Due");
+  assert.equal(ctx.pulseWindowStatus({ ...active, last_attempt: past }, {}).text, "Awaiting confirmation");
+  assert.equal(ctx.pulseWindowStatus({ ...active, last_attempt: future, last_success: past }, {}).text, "Awaiting confirmation");
+  assert.equal(ctx.pulseWindowStatus({ ...active, last_attempt: past, last_success: past }, {}).text, "Active");
+  assert.equal(ctx.pulseWindowStatus({ ...active, last_attempt: past, last_success: future }, {}).text, "Active");
+  assert.equal(ctx.pulseWindowStatus({ ...active, enabled: false, last_attempt: past }, {}).text, "Disabled");
+  assert.equal(ctx.pulseWindowStatus({ ...active, last_attempt: past }, { consecutive_failures: 2 }).text, "2 failures");
+  assert.match(ctx.pulseWindowStatus(active, { circuit_until: future, circuit_reason: "CPA cooldown" }).text, /Paused until/);
+  const blocked = ctx.pulseWindowStatus({ ...active, last_attempt: past }, { blocked_window: "30d", blocked_until: future });
+  assert.equal(blocked.text, "30-day quota used up");
+  assert.match(blocked.title, /Ignition resumes after the reset/);
+  assert.equal(ctx.pulseWindowStatus(active, null).text, "Monitor-only");
+});
+
+test("long windows with no reset or due time show a muted unknown badge", () => {
+  const ctx = pulseWindowsContext([], { status: { targets: [{ key: "g", windows: [{ kind: "30d", enabled: true }] }] } });
+  const state = ctx.pulseWindowStatus({ kind: "30d", enabled: true }, {});
+  assert.equal(state.kind, "muted");
+  assert.equal(state.text, "Reset unknown");
+  const box = ctx.pulseWindowControl({}, { key: "g" });
+  const badges = descendants(box, node => node.getAttribute("class") === "badge badge-muted");
+  assert.equal(badges.length, 1);
+  assert.equal(badges[0].textContent, "30d · Reset unknown");
+  assert.doesNotMatch(box.textContent, /Active/);
+  assert.equal(ctx.pulseWindowStatus({ kind: "30d", enabled: true, rolling: true }, {}).text, "Due");
+});
+
+test("pending attempts with unknown resets show a muted Pending badge", () => {
+  const past = new Date(Date.now() - DAY * 1000).toISOString();
+  const future = new Date(Date.now() + DAY * 1000).toISOString();
+  const ctx = pulseWindowsContext();
+  for (const kind of ["5h", "7d", "30d"]) {
+    for (const next_due of [undefined, future]) {
+      const w = { kind, enabled: true, last_attempt: past, next_due };
+      assert.deepEqual(plain(ctx.pulseWindowStatus(w, {})), { kind: "muted", text: "Pending" });
+      ctx.status.targets = [{ key: "g", windows: [w] }];
+      const box = ctx.pulseWindowControl({}, { key: "g" });
+      assert.equal(descendants(box, node => node.getAttribute("class") === "badge badge-muted")[0].textContent, kind + " · Pending");
+      assert.doesNotMatch(box.textContent, /Awaiting confirmation/);
+      assert.equal(ctx.pulseWindowStatus(w, { consecutive_failures: 1 }).kind, "warning");
+    }
+  }
+});
+
+test("account group windows join targets by key, show each timestamp and keep one manual pulse", () => {
+  const future = new Date(Date.now() + DAY * 1000).toISOString(), calls = [], confirms = [];
+  const group = { key: "g", windows: [{ id: "fallback", kind: "7d" }] };
+  const target = { key: "g", label: "Account", windows: [
+    { id: "window-5h", kind: "5h", class: "short", enabled: true, reset: future, next_due: future },
+    { id: "window-30d", kind: "30d", class: "long", enabled: false, rolling: true },
+  ] };
+  const ctx = pulseWindowsContext([], {
+    API: "/api", status: { targets: [{ key: "other", windows: [{ id: "wrong" }] }, target] },
+    confirm: value => { confirms.push(value); return true; }, runAction: (...args) => calls.push(args),
+  });
+  const box = ctx.pulseWindowControl({ cooldown_until: future }, group);
+  assert.match(box.textContent, /5h · ActiveReset: .*Next action:/);
+  assert.match(box.textContent, /30d · DisabledStarts with use/);
+  assert.match(box.textContent, /CPA cooldown until/);
+  assert.doesNotMatch(box.textContent, /fallback|wrong/);
+  assert.equal(box.children[0].getAttribute("data-window-class"), "short");
+  assert.equal(box.children[1].getAttribute("data-window-class"), "long");
+  const buttons = descendants(box, node => node.tagName === "BUTTON");
+  assert.equal(buttons.length, 1);
+  buttons[0].events.click();
+  assert.equal(confirms.length, 1);
+  assert.equal(calls[0][1], "/api/ignite");
+  assert.deepEqual(plain(calls[0][2]), { target: "g" });
+  ctx.confirm = () => false;
+  buttons[0].events.click();
+  assert.equal(calls.length, 1);
+  assert.match(source, /block.appendChild\(pulseWindowControl\(account, group\)\)/);
+  const renderTargets = source.match(/  function renderTargets\([^]*?\n  }/)[0];
+  assert.doesNotMatch(renderTargets, /\/ignite|ignite_now/);
+});
+
+test("Kimi and xAI group windows without targets show monitor-only and no manual pulse", () => {
+  const ctx = pulseWindowsContext();
+  for (const provider of ["kimi", "xai"]) {
+    const box = ctx.pulseWindowControl({ provider }, { key: provider, windows: [
+      { id: "long", kind: "30d", reset: "2026-12-25T00:00:00Z" }, { id: "short", kind: "5h", rolling: true },
+    ] });
+    assert.match(box.textContent, /30d · Monitor-onlyReset: 2026-12-25T00:00:00.000Z/);
+    assert.match(box.textContent, /5h · Monitor-onlyStarts with use/);
+    assert.equal(descendants(box, node => node.tagName === "BUTTON").length, 0);
+  }
+});
+
+test("30d quota labels, defaults and chart ranges stay distinct from the calendar month range", () => {
+  const ctx = windowContext(["windowName", "rangeFor", "extendsAhead", "eventWindow"], {
+    rememberChart: () => false,
+  });
+  assert.equal(ctx.windowName({ kind: "30d", short: "Monthly", label: "Monthly" }), "30-day window");
+  assert.equal(ctx.windowName({ short: "30d" }), "30-day window");
+  assert.equal(ctx.windowName({ short: "5h" }), "5-hour window");
+  assert.equal(ctx.windowName({ short: "7d" }), "7-day window");
+  assert.equal(ctx.windowName({ kind: "7d", short: "Opus 7d", label: "7 Day Opus" }), "7 Day Opus");
+  assert.equal(ctx.rangeFor("30d"), "31d");
+  assert.equal(ctx.rangeFor("7d"), "8d");
+  assert.equal(ctx.rangeFor("5h"), "6h");
+  assert.deepEqual(plain(ctx.RANGES["30d"].map(range => range[0])), ["24h", "15d", "31d", "61d", "90d", "151d"]);
+  assert.equal(ctx.WINDOW_SECONDS["30d"], 30 * DAY);
+  assert.equal(ctx.extendsAhead("30d", "15d"), false);
+  assert.equal(ctx.extendsAhead("30d", "31d"), true);
+  assert.ok(ctx.RANGES["7d"].some(range => range[0] === "1mo" && range[2] === "mo"));
+  assert.equal(ctx.translate("quota_30d"), "30-day quota");
+  assert.equal(ctx.translate("legend_projection_30d"), "Projection at this cycle's daily average");
+  assert.deepEqual(plain(ctx.eventWindow({ window: "thirty-day" })), { kind: "30d", label: "30d" });
+  assert.deepEqual(plain(ctx.eventWindow({ window: "quota-30d" })), { kind: "30d", label: "30d" });
+  assert.match(fs.readFileSync(path.join(__dirname, "page.html"), "utf8"), /data-value="30d"[^>]*data-i18n="quota_30d">30-day quota/);
+});
+
+function historyWindowContext(extraNames = [], globals = {}) {
+  return windowContext(["historyKey", "fetchHistory", "showHistory", "loadHistory", "rangeFor", "windowKind", "recentSamples", "windowKinds", ...extraNames], {
+    API: "/v0/management/cpa-pulse", status: { accounts: [] },
+    chartWindow: "30d", range: "31d", chartSort: "default", history: null, historyWindow: "", historyRange: "",
+    historyCache: {}, historyPending: {}, historySeq: 0, historyTicket: 0, historyLoading: "", historyFailed: "",
+    rememberChart: () => false, renderChart() {}, $: () => ({ classList: { add() {} } }),
+    ...globals,
+  });
+}
+
+test("30d chart requests its chosen range and caches independently from 5h and 7d", async () => {
+  const calls = [], renders = [], replies = [];
+  const ctx = historyWindowContext([], {
+    api: (...args) => { calls.push(args); return new Promise(resolve => replies.push(resolve)); },
+  });
+  ctx.renderChart = () => renders.push([ctx.historyWindow, ctx.historyRange, ctx.history]);
+  const request = ctx.loadHistory();
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0][0], "GET");
+  const url = new URL(calls[0][1], "https://example.com");
+  assert.equal(url.pathname, "/v0/management/cpa-pulse/history");
+  assert.equal(url.searchParams.get("window"), "30d");
+  assert.equal(url.searchParams.get("range"), "31d");
+  const data = { series: [{ kind: "30d", points: [[1, 90, 0]] }] };
+  const duplicate = ctx.fetchHistory("30d", "31d");
+  assert.equal(calls.length, 1);
+  replies.shift()(data);
+  assert.equal(await request, true);
+  await duplicate;
+  assert.equal(ctx.historyWindow, "30d");
+  assert.equal(ctx.historyRange, "31d");
+  assert.equal(ctx.historyCache["30d|31d"].data, data);
+  assert.equal(ctx.historyCache["7d|31d"], undefined);
+  assert.equal(ctx.historyCache["5h|31d"], undefined);
+  ctx.history = null; ctx.historyWindow = "7d";
+  const cached = ctx.loadHistory();
+  assert.equal(ctx.history, data);
+  assert.deepEqual(renders.at(-1).slice(0, 2), ["30d", "31d"]);
+  replies.shift()(data);
+  await cached;
+  ctx.range = "61d";
+  const differentRange = ctx.loadHistory();
+  replies.shift()({ series: [] });
+  await differentRange;
+  assert.ok(ctx.historyCache["30d|31d"]);
+  assert.ok(ctx.historyCache["30d|61d"]);
+});
+
+test("30d history cannot be replaced by a late response for a different window", async () => {
+  const replies = {};
+  const ctx = historyWindowContext([], { api: (method, url) => new Promise(resolve => { replies[url] = resolve; }) });
+  ctx.chartWindow = "7d"; ctx.range = "8d";
+  const old = ctx.loadHistory();
+  ctx.chartWindow = "30d"; ctx.range = "31d";
+  const chosen = ctx.loadHistory();
+  replies["/v0/management/cpa-pulse/history?range=31d&window=30d"]({ series: [{ kind: "30d" }] });
+  assert.equal(await chosen, true);
+  replies["/v0/management/cpa-pulse/history?range=8d&window=7d"]({ series: [{ kind: "7d" }] });
+  assert.equal(await old, false);
+  assert.equal(ctx.historyWindow, "30d");
+  assert.ok(ctx.historyCache["7d|8d"]);
+});
+
+test("30d chart remains selectable from account windows or recent cached history and prefetches", async () => {
+  const ctx = historyWindowContext(["prefetchHistory"], {
+    status: { accounts: [{ groups: [{ windows: [{ kind: "30d" }, { kind: "unknown" }] }] }] },
+    renderWindowButtons: () => false,
+  });
+  assert.deepEqual(plain(ctx.windowKinds()), ["30d"]);
+  ctx.status.accounts[0].groups[0].windows = [{ kind: "5h" }];
+  ctx.historyCache["30d|31d"] = { data: { from: "2026-11-01T00:00:00Z", series: [{ kind: "30d", points: [[Date.parse("2026-11-24T00:00:00Z") / 1000, 60, 0]] }] } };
+  assert.deepEqual(plain(ctx.windowKinds()), ["5h", "30d"]);
+  const fetched = [];
+  ctx.fetchHistory = async (kind, range) => { fetched.push([kind, range]); };
+  ctx.chartWindow = "5h";
+  ctx.prefetchHistory();
+  assert.deepEqual(fetched, [["7d", "8d"]]);
+  ctx.historyCache = {};
+  fetched.length = 0;
+  ctx.prefetchHistory();
+  assert.deepEqual(fetched, [["7d", "8d"], ["30d", "31d"]]);
+});
+
+test("30d burn projection and even pace use a fixed 30-day cycle while 5h keeps its current rate", () => {
+  const ctx = windowContext(["cycleRate", "projection", "rowPace", "paceSegments", "paceExtensions", "pooledPace", "paceAt", "extendedPace"], {
+    historyWindow: "30d", RESET_DRIFT: 60, RESET_JUMP: 5,
+    currentRate: () => ({ rate: -0.01, held: false }),
+  });
+  const now = 4000 * DAY, reset = now + 20 * DAY;
+  const row = { weight: 1, reset, points: [[now, 60]], floor: [[now, 60]], resets: [[now - DAY, reset]] };
+  assert.ok(Math.abs(ctx.cycleRate(row, now) + 40 / (10 * DAY)) < 1e-12);
+  assert.ok(Math.abs(ctx.rowPace(row, now).at(now) - 100 * 20 / 30) < 1e-9);
+  let projected = ctx.projection(row, { now, to: reset }, { end: now }, 600);
+  assert.ok(Math.abs(projected.at(now + DAY) - 56) < 1e-9);
+  assert.ok(Math.abs(projected.out - (now + 15 * DAY)) < 1e-9);
+  ctx.historyWindow = "7d";
+  row.reset = now + 5 * DAY;
+  assert.ok(Math.abs(ctx.cycleRate(row, now) + 40 / (2 * DAY)) < 1e-12);
+  ctx.historyWindow = "5h";
+  projected = ctx.projection(row, { now, to: now + 3600 }, { end: now }, 600);
+  assert.equal(projected.at(now + 1000), 50);
+});
+
+test("changing ignition windows saves through the normal config queue, including both unchecked", async () => {
+  const writes = [], { checks, inputs } = windowSettingsContext();
+  const ctx = context(["saveField", "captureIntent", "buildPatch", "noteEdit", "saveControls", "inputTop", "topKey", "setPath", "patchConfig"], {
+    $: () => ({ elements: inputs }), THRESHOLDS: [], saveQueue: Promise.resolve(),
+    rawConfig: { ignition: { hidden: true } }, status: { config: {} }, CONFIG_API: "/config", savedTokens: [],
+    newConfigToken: () => "token", saveHost: () => ({}), claimState: () => () => true,
+    api: async (...args) => { writes.push(plain(args)); return {}; },
+    showApplied: async () => false, loadConfig: async () => {}, renderIgnitionOff() {},
+  });
+  for (const selected of [[], ["short"], ["long"], ["short", "long"]]) {
+    checks.forEach(input => { input.checked = selected.includes(input.value); });
+    ctx.saveField({ target: checks[0] });
+    await ctx.saveQueue;
+    const [method, url, patch] = writes.at(-1);
+    assert.equal(method, "PATCH");
+    assert.equal(url, "/config");
+    assert.deepEqual(patch.ignition.windows, selected);
+    assert.equal(patch.ignition.hidden, true);
+  }
+});
+
+test("30d chart selection and range buttons request 31d by default and switch to 61d", async () => {
+  const calls = [], boxes = {}, pressed = [];
+  const node = id => boxes[id] || (boxes[id] = priceNode("div"));
+  node("chart").classList = { add() {} };
+  node("range-buttons").querySelectorAll = () => node("range-buttons").children;
+  node("range-buttons").removeChild = child => { node("range-buttons").children = node("range-buttons").children.filter(value => value !== child); };
+  for (const id of ["window-buttons", "range-buttons"]) {
+    node(id).addEventListener = (event, fn) => { node(id).events[event] = fn; };
+  }
+  const ctx = historyWindowContext(["bindSegmented", "renderRangeButtons"], {
+    $: node, el: priceNode, chartWindow: "5h", range: "6h", api: async (method, url) => { calls.push([method, url]); return { series: [] }; },
+    pressSegment: (...args) => pressed.push(args), saveChartFilters() {}, observeOptions() {}, thumbObserver: { unobserve() {} },
+  });
+  for (const id of ["window-buttons", "range-buttons"]) {
+    vm.runInContext(source.match(new RegExp('  bindSegmented\\("' + id + '", function \\(value\\) \\{[^]*?\\n  \\}\\);'))[0], ctx);
+  }
+  const windowButton = priceNode("button", { "data-value": "30d", "aria-pressed": "false" });
+  windowButton.closest = () => windowButton;
+  node("window-buttons").events.click({ target: windowButton });
+  await Promise.resolve(); await Promise.resolve();
+  assert.equal(ctx.chartWindow, "30d");
+  assert.equal(ctx.range, "31d");
+  assert.deepEqual(node("range-buttons").children.map(button => button.getAttribute("data-value")), ["24h", "15d", "31d", "61d", "90d", "151d"]);
+  assert.deepEqual(node("range-buttons").children.map(button => button.textContent), ["24h", "15d", "31d", "61d", "90d", "151d"]);
+  assert.deepEqual(calls[0], ["GET", "/v0/management/cpa-pulse/history?range=31d&window=30d"]);
+  const rangeButton = node("range-buttons").children[3];
+  rangeButton.closest = () => rangeButton;
+  node("range-buttons").events.click({ target: rangeButton });
+  await Promise.resolve(); await Promise.resolve();
+  assert.equal(ctx.range, "61d");
+  assert.deepEqual(calls[1], ["GET", "/v0/management/cpa-pulse/history?range=61d&window=30d"]);
+  assert.ok(ctx.historyCache["30d|31d"]);
+  assert.ok(ctx.historyCache["30d|61d"]);
+});
+
+test("remembered 30d chart filters restore and save their own range without changing calendar month history", () => {
+  let saved = { window: "30d", sort: "low", ranges: { "5h": "3h", "7d": "1mo", "30d": "90d" } };
+  const ctx = historyWindowContext(["restoreChartFilters", "storedChartFilters", "saveChartFilters"], {
+    chartWindow: "5h", range: "6h", CHART_STORE: "filters", rememberChart: () => true,
+    restoreChartExpanded() {}, renderRangeButtons() {}, pressSegment() {},
+    status: { accounts: [{ groups: [{ windows: [{ kind: "30d" }] }] }] },
+    localStorage: { getItem: () => JSON.stringify(saved), setItem: (key, value) => { assert.equal(key, "filters"); saved = JSON.parse(value); } },
+  });
+  ctx.restoreChartFilters();
+  assert.equal(ctx.chartWindow, "30d");
+  assert.equal(ctx.range, "90d");
+  assert.equal(ctx.chartSort, "low");
+  ctx.range = "31d";
+  ctx.saveChartFilters();
+  assert.deepEqual(saved, { window: "30d", sort: "low", ranges: { "5h": "3h", "7d": "1mo", "30d": "31d" } });
+  saved.ranges["30d"] = "1mo";
+  assert.equal(ctx.rangeFor("30d"), "31d");
+  assert.equal(ctx.rangeFor("7d"), "1mo");
+});
+
+test("long history ranges use readable date tick counts through 151 days", () => {
+  const ctx = windowContext(["chartTicks"], { offsetSeconds: () => 0, fmtDay: () => "date", unixDate: value => new Date(value * 1000) });
+  for (const days of [31, 61, 90, 151]) {
+    const ticks = ctx.chartTicks({ from: 0, to: days * DAY });
+    assert.ok(ticks.list.length >= 5 && ticks.list.length <= 8, days + " days has " + ticks.list.length + " ticks");
+    assert.equal(ticks.label(ticks.list[0]), "date");
+  }
+});
+
+test("rendered account cards keep a single pulse action for each matching group across short and long windows", () => {
+  const cards = priceNode("div"), future = new Date(Date.now() + DAY * 1000).toISOString();
+  const windows = [
+    { id: "short", kind: "5h", class: "short", enabled: true, reset: future },
+    { id: "long", kind: "7d", class: "long", enabled: true, reset: future },
+    { id: "longer", kind: "30d", class: "long", enabled: false, reset: future },
+  ];
+  const ctx = pulseWindowsContext(["renderAccounts"], {
+    $: () => cards, document: { activeElement: null }, accountDrag: null, accountsBehind: false, masked: false, SENSITIVE: "sensitive",
+    status: { accounts: [{ name: "account", provider: "codex", groups: [{ key: "a", windows: [] }, { key: "b", windows: [] }] }],
+      targets: [{ key: "a", label: "A", windows }, { key: "b", label: "B", windows }] },
+    renderAccountSettings() {}, accountWeight: () => 1, providerTitle: value => value,
+    quotaRow: () => priceNode("div"), pulseModelControl: () => null, freshness: () => null,
+    clear: node => { node.children = []; }, snapshotButton: () => priceNode("button"),
+  });
+  ctx.renderAccounts();
+  const groups = descendants(cards, node => node.getAttribute("class") === "quota-group");
+  assert.equal(groups.length, 2);
+  for (const group of groups) {
+    assert.equal(descendants(group, node => node.tagName === "BUTTON").length, 1);
+    assert.equal(descendants(group, node => node.getAttribute("class") === "pulse-window").length, 3);
+    assert.match(group.textContent, /5h · Active.*7d · Active.*30d · Disabled/);
+  }
 });

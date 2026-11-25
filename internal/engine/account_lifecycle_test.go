@@ -132,9 +132,6 @@ func TestActiveWindowDisappearanceAndReturn(t *testing.T) {
 					t.Fatal("missing window must be marked for a persisted baseline")
 				}
 				wantTargets := 1
-				if missingID == quota.WindowFiveHour {
-					wantTargets = 0
-				}
 				if got := len(e.collectTargets(cfg)); got != wantTargets {
 					t.Fatalf("targets after disappearance=%d, want %d", got, wantTargets)
 				}

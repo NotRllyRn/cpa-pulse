@@ -181,13 +181,50 @@ func Candidates(p *Provider, group, override string, available []string) ([]stri
 		return nil, fmt.Errorf("configured ignition model %s is missing from the CPA model list", override)
 	}
 	var out []string
-	if p.Ignition != nil {
-		out = models.Unique(p.Ignition.Candidates(group, available))
+	if p != nil && p.Ignition != nil {
+		eligible := EligibleModels(p, group, available)
+		out = models.Unique(append(p.Ignition.Candidates(group, eligible), eligible...))
 	}
 	if len(out) == 0 {
 		return nil, errors.New("CPA model list contains no ignition model suitable for this credential")
 	}
 	return out, nil
+}
+
+// EligibleModels separates provider/group compatibility from default ordering.
+func EligibleModels(p *Provider, group string, available []string) []string {
+	out := []string{}
+	if p == nil || p.Ignition == nil {
+		return out
+	}
+	for _, id := range models.Unique(available) {
+		m := strings.ToLower(id)
+		text := true
+		for _, excluded := range []string{"image", "embedding", "rerank", "audio", "tts", "whisper", "video", "realtime"} {
+			if strings.Contains(m, excluded) {
+				text = false
+				break
+			}
+		}
+		if !text {
+			continue
+		}
+		compatible := false
+		switch p.ID {
+		case "claude":
+			compatible = strings.HasPrefix(m, "claude-")
+		case "codex":
+			compatible = strings.Contains(m, "luna") || strings.HasPrefix(m, "gpt-") && !strings.Contains(m, "oss") || strings.HasPrefix(m, "o1") || strings.HasPrefix(m, "o3") || strings.HasPrefix(m, "o4")
+		case "antigravity":
+			g := strings.ToLower(group)
+			compatible = strings.Contains(g, "gemini") && strings.HasPrefix(m, "gemini-") ||
+				(strings.Contains(g, "claude") || strings.Contains(g, "gpt")) && (strings.HasPrefix(m, "claude-") || strings.HasPrefix(m, "gpt-"))
+		}
+		if compatible {
+			out = append(out, id)
+		}
+	}
+	return out
 }
 
 // chatBody is an OpenAI chat completion request for model.
@@ -201,4 +238,22 @@ func chatBody(model string, extra map[string]any) map[string]any {
 		body[key] = value
 	}
 	return body
+}
+
+// Pulseable reports whether a request for the group can start this window.
+// Scoped pools without a model mapping remain monitor-only.
+func Pulseable(provider, groupLabel string, w quota.Window) bool {
+	p := Lookup(provider)
+	if p == nil || p.Ignition == nil || quota.Class(w) == "" {
+		return false
+	}
+	switch p.ID {
+	case "claude":
+		return strings.EqualFold(groupLabel, "Claude") && (w.ID == quota.WindowFiveHour || w.ID == quota.WindowSevenDay)
+	case "codex":
+		return strings.EqualFold(groupLabel, "GPT") && (w.ID == quota.WindowFiveHour || w.ID == quota.WindowSevenDay || w.ID == quota.WindowThirtyDay)
+	case "antigravity":
+		return strings.EqualFold(groupLabel, "Gemini") || strings.EqualFold(groupLabel, "Claude / GPT")
+	}
+	return false
 }

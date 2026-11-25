@@ -111,6 +111,7 @@ func (e *Engine) publishCredential(authIndex, reason string) {
 // as changed, so that ignition tries once and records the fingerprint if it
 // fails again.
 func (e *Engine) noteFingerprint(cred *Cred, fingerprint string) {
+	e.noteModelFingerprint(cred, fingerprint)
 	if e.state == nil {
 		return
 	}
@@ -381,4 +382,32 @@ func rateLimitedNotice(lang, label string, d failure.Diagnosis, until time.Time,
 		Kind: notify.KindRateLimited, Status: d.StatusText(), Code: d.Code, Summary: credentialSummary(d),
 		Ignition: true, Until: until,
 	}, loc)
+}
+
+// noteModelFingerprint clears model access learned from another login.
+func (e *Engine) noteModelFingerprint(cred *Cred, fingerprint string) {
+	if e.state == nil || fingerprint == "" {
+		return
+	}
+	if e.state.ModelFingerprints == nil {
+		e.state.ModelFingerprints = map[string]string{}
+	}
+	previous := e.state.ModelFingerprints[cred.AuthIndex]
+	if previous == fingerprint {
+		return
+	}
+	e.state.ModelFingerprints[cred.AuthIndex] = fingerprint
+	e.dirty = true
+	prefix := cred.Provider + ":" + cred.AuthIndex + ":"
+	for key := range e.refused {
+		if strings.HasPrefix(key, prefix) {
+			delete(e.refused, key)
+		}
+	}
+	for key, ts := range e.state.Scheduler {
+		if ts != nil && strings.HasPrefix(key, prefix) {
+			ts.ConfirmedModel = ""
+			e.publishModelState(key)
+		}
+	}
 }

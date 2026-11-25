@@ -12,12 +12,14 @@ import (
 
 // Window labels. Notifications shorten them with ShortLabel.
 const (
-	LabelFiveHour  = "5 Hour"
-	LabelSevenDay  = "7 Day"
-	LabelFable     = "7 Day Fable 5"
-	WindowFiveHour = "five-hour"
-	WindowSevenDay = "seven-day"
-	WindowFable    = "seven-day-fable"
+	LabelThirtyDay  = "30 days"
+	WindowThirtyDay = "window-30d"
+	LabelFiveHour   = "5 Hour"
+	LabelSevenDay   = "7 Day"
+	LabelFable      = "7 Day Fable 5"
+	WindowFiveHour  = "five-hour"
+	WindowSevenDay  = "seven-day"
+	WindowFable     = "seven-day-fable"
 )
 
 // Source marks where a window value came from.
@@ -41,14 +43,16 @@ type Window struct {
 
 // Window kinds.
 const (
-	KindFiveHour = "5h"
-	KindSevenDay = "7d"
+	KindFiveHour  = "5h"
+	KindSevenDay  = "7d"
+	KindThirtyDay = "30d"
 )
 
 // Window periods.
 const (
-	FiveHours = 5 * time.Hour
-	SevenDays = 7 * 24 * time.Hour
+	FiveHours  = 5 * time.Hour
+	SevenDays  = 7 * 24 * time.Hour
+	ThirtyDays = 720 * time.Hour
 )
 
 // RawGroup is a set of windows as returned by one provider, before it is
@@ -65,6 +69,8 @@ type RawGroup struct {
 // ShortLabel returns the compact window label used in notifications.
 func ShortLabel(label string) string {
 	switch label {
+	case LabelThirtyDay:
+		return KindThirtyDay
 	case LabelFiveHour:
 		return "5h"
 	case LabelSevenDay, LabelFable:
@@ -73,7 +79,7 @@ func ShortLabel(label string) string {
 	return label
 }
 
-// Kind returns KindFiveHour, KindSevenDay or "" for a window of another
+// Kind returns a supported window kind or "" for a window of another
 // length. The period decides when the provider states one; other windows
 // are known by their ID and label.
 func Kind(w Window) string {
@@ -83,10 +89,14 @@ func Kind(w Window) string {
 			return KindFiveHour
 		case near(w.Period, SevenDays):
 			return KindSevenDay
+		case w.Period >= 27*24*time.Hour && w.Period <= 32*24*time.Hour:
+			return KindThirtyDay
 		}
 		return ""
 	}
 	switch {
+	case w.ID == WindowThirtyDay || ShortLabel(w.Label) == KindThirtyDay:
+		return KindThirtyDay
 	case w.ID == WindowFiveHour || ShortLabel(w.Label) == "5h":
 		return KindFiveHour
 	case w.ID == WindowSevenDay || ShortLabel(w.Label) == "7d" || strings.HasPrefix(w.Label, "7 Day"):
@@ -186,4 +196,31 @@ func unixTime(seconds float64) time.Time {
 	whole := int64(seconds)
 	nanos := int64((seconds - float64(whole)) * 1e9)
 	return time.Unix(whole, nanos).UTC()
+}
+
+// Class returns the ignition class of a supported window.
+func Class(w Window) string {
+	switch Kind(w) {
+	case KindFiveHour:
+		return "short"
+	case KindSevenDay, KindThirtyDay:
+		return "long"
+	}
+	return ""
+}
+
+// Period returns the duration of a supported window.
+func Period(w Window) time.Duration {
+	if w.Period > 0 {
+		return w.Period
+	}
+	switch Kind(w) {
+	case KindFiveHour:
+		return FiveHours
+	case KindSevenDay:
+		return SevenDays
+	case KindThirtyDay:
+		return ThirtyDays
+	}
+	return 0
 }

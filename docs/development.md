@@ -23,7 +23,7 @@ node --test internal/web/page_test.cjs
 
 Set `CPA_PULSE_WEB_FIXTURE_DIR` to a directory when running `go test ./internal/engine -run TestWebPreviewFixture` to export management-page fixtures.
 
-Tests use fake hosts and HTTP servers without real model requests. Coverage includes provider parsing and aliases, periods, egress, schedules, model candidates/fallback, stream parsing/cancellation/ownership, usage accounting, alerts, webhook escaping/redaction, reset-signal deduplication, engine state and history, credentials/plans, MCP protocol/data/cancellation, plugin RPC, release comparison and instance locking.
+Tests use fake hosts and HTTP servers without real model requests. Coverage includes provider parsing and aliases, periods, egress, short/long per-window scheduling and confirmation, stale-reset deduplication, 30-day history, pricing catalog/cache/overrides and eligibility, strict manual model choices and bounded fallback, stream parsing/cancellation/ownership, usage accounting, alerts, webhook escaping/redaction, reset-signal deduplication, engine state and history, credentials/plans, MCP protocol/data/cancellation, plugin RPC, release comparison and instance locking.
 
 The [CI workflow](../.github/workflows/ci.yml) runs on main pushes and pull requests. Linux checks `gofmt -l .` is empty, then runs vet, Go tests and the JS syntax check. Race and Node behavioral tests are available for local verification. Commits affecting only Markdown, `docs/` or `assets/` do not trigger CI. A newer run cancels the older run on that branch. macOS and Windows Go checks run during release builds.
 

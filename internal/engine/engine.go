@@ -1,9 +1,9 @@
 // Package engine runs cpa-pulse's background loop: quota polling, passive
 // quota updates, ignition, notifications and history.
 //
-// One goroutine owns the state and performs all network work in order.
-// usage.handle and the management API talk to it through channels, so the
-// host callbacks never block on upstream requests.
+// One goroutine owns quota and ignition state and runs their requests in order.
+// Pricing refreshes run separately. usage.handle and management actions use
+// channels so host callbacks do not wait for upstream requests.
 package engine
 
 import (
@@ -23,6 +23,7 @@ import (
 	"github.com/NotRllyRn/cpa-pulse/internal/ignite"
 	"github.com/NotRllyRn/cpa-pulse/internal/models"
 	"github.com/NotRllyRn/cpa-pulse/internal/notify"
+	"github.com/NotRllyRn/cpa-pulse/internal/pricing"
 	"github.com/NotRllyRn/cpa-pulse/internal/release"
 	"github.com/NotRllyRn/cpa-pulse/internal/store"
 )
@@ -92,7 +93,12 @@ type Engine struct {
 	// notifyErr is the reason the webhook settings were not applied.
 	notifyErr string
 	// nextModels is the model automatic selection picks next, per provider.
-	nextModels map[string]string
+	nextModels        map[string]string
+	availableModels   []string
+	pricingMgr        *pricing.Manager
+	pricingDir        string
+	pricingRefreshing bool
+	modelStates       map[string]modelState
 	// latest is the latest release when it is newer than this version.
 	latest release.Release
 	// releaseMu is held while the latest release is read, and guards
@@ -179,6 +185,9 @@ func New(opts Options) *Engine {
 		stopCh:         make(chan struct{}),
 		doneCh:         make(chan struct{}),
 	}
+	e.pricingDir = e.resolveDataDir(cfg)
+	e.pricingMgr = pricing.NewManager(e.pricingDir)
+	e.modelStates = map[string]modelState{}
 	e.egress = &egress.Egress{Host: opts.Host, Timeout: cfg.RequestTimeout()}
 	return e
 }
@@ -191,6 +200,10 @@ func (e *Engine) Configure(cfg config.Config, parseErr error) uint64 {
 		e.cfgErr = parseErr.Error()
 		e.mu.Unlock()
 		return 0
+	}
+	if dir := e.resolveDataDir(cfg); dir != e.pricingDir {
+		e.pricingMgr = pricing.NewManager(dir)
+		e.pricingDir = dir
 	}
 	e.cfgRevision++
 	revision := e.cfgRevision
@@ -380,7 +393,7 @@ func (e *Engine) openStores(cfg config.Config) error {
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return fmt.Errorf("Failed to create data directory %s: %w", dir, err)
 	}
-	e.stateFile = &store.StateFile{Path: filepath.Join(dir, "state.json")}
+	e.stateFile = &store.StateFile{Path: filepath.Join(dir, "state.json"), Now: e.now}
 	state, _, err := e.stateFile.Load()
 	if err != nil {
 		e.logf("warn", "%v", err)
@@ -390,6 +403,10 @@ func (e *Engine) openStores(cfg config.Config) error {
 		e.dirty = true
 	}
 	e.state = state
+	if state.RefusedModels == nil {
+		state.RefusedModels = map[string]time.Time{}
+	}
+	e.refused = state.RefusedModels
 	e.history = &store.History{Dir: filepath.Join(dir, "history")}
 	e.mu.Lock()
 	e.dataDir = dir
@@ -397,6 +414,12 @@ func (e *Engine) openStores(cfg config.Config) error {
 	for authIndex, st := range state.Credentials {
 		if st != nil && st.Reason != "" {
 			e.credProblems[authIndex] = st.Reason
+		}
+	}
+	e.modelStates = map[string]modelState{}
+	for key, ts := range state.Scheduler {
+		if ts != nil {
+			e.modelStates[key] = modelState{LastSuccessfulModel: ts.LastSuccessfulModel, ConfirmedModel: ts.ConfirmedModel}
 		}
 	}
 	e.plans = map[string]string{}
@@ -559,6 +582,7 @@ func (e *Engine) run() {
 		e.mu.Unlock()
 
 		if enabled {
+			e.maybeRefreshPrices(ctx, cfg, now)
 			e.drainUsage(ctx)
 			if cfg.CodexResetUpdates.Enabled && !now.Before(nextFeed) {
 				e.pollResetFeed(ctx, cfg)

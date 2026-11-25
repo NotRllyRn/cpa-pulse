@@ -12,6 +12,7 @@ import (
 	"slices"
 	"strings"
 	"sync"
+	"time"
 )
 
 // WindowState is the notification baseline of one quota window.
@@ -82,18 +83,21 @@ type Observation struct {
 // TargetState is the ignition schedule and failure protection state of one
 // ignition target.
 type TargetState struct {
-	RollingReset              bool         `json:"rolling_reset,omitempty"`
-	ResetObservation          *Observation `json:"reset_observation,omitempty"`
-	LastSuccessEpoch          float64      `json:"last_success_epoch,omitempty"`
-	LastAttemptEpoch          float64      `json:"last_attempt_epoch,omitempty"`
-	LastModel                 string       `json:"last_model,omitempty"`
-	LastError                 string       `json:"last_error,omitempty"`
-	LastFailureEpoch          float64      `json:"last_failure_epoch,omitempty"`
-	ConsecutiveFailures       int          `json:"consecutive_failures,omitempty"`
-	RetryAtEpoch              float64      `json:"retry_at_epoch,omitempty"`
-	CircuitOpenUntilEpoch     float64      `json:"circuit_open_until_epoch,omitempty"`
-	CircuitReason             string       `json:"circuit_reason,omitempty"`
-	CircuitNotifiedUntilEpoch float64      `json:"circuit_notified_until_epoch,omitempty"`
+	Windows                   map[string]*IgnitionWindowState `json:"windows,omitempty"`
+	LastSuccessfulModel       string                          `json:"last_successful_model,omitempty"`
+	ConfirmedModel            string                          `json:"confirmed_model,omitempty"`
+	RollingReset              bool                            `json:"rolling_reset,omitempty"`
+	ResetObservation          *Observation                    `json:"reset_observation,omitempty"`
+	LastSuccessEpoch          float64                         `json:"last_success_epoch,omitempty"`
+	LastAttemptEpoch          float64                         `json:"last_attempt_epoch,omitempty"`
+	LastModel                 string                          `json:"last_model,omitempty"`
+	LastError                 string                          `json:"last_error,omitempty"`
+	LastFailureEpoch          float64                         `json:"last_failure_epoch,omitempty"`
+	ConsecutiveFailures       int                             `json:"consecutive_failures,omitempty"`
+	RetryAtEpoch              float64                         `json:"retry_at_epoch,omitempty"`
+	CircuitOpenUntilEpoch     float64                         `json:"circuit_open_until_epoch,omitempty"`
+	CircuitReason             string                          `json:"circuit_reason,omitempty"`
+	CircuitNotifiedUntilEpoch float64                         `json:"circuit_notified_until_epoch,omitempty"`
 }
 
 // SentEvent is the last notification sent for one scheduled reset.
@@ -117,10 +121,12 @@ type CodexResetState struct {
 
 // State is the content of state.json.
 type State struct {
-	Version    int                     `json:"version"`
-	Groups     map[string]*GroupState  `json:"groups"`
-	Scheduler  map[string]*TargetState `json:"scheduler"`
-	CodexReset *CodexResetState        `json:"codex_reset_updates,omitempty"`
+	RefusedModels     map[string]time.Time    `json:"refused_models,omitempty"`
+	ModelFingerprints map[string]string       `json:"model_fingerprints,omitempty"`
+	Version           int                     `json:"version"`
+	Groups            map[string]*GroupState  `json:"groups"`
+	Scheduler         map[string]*TargetState `json:"scheduler"`
+	CodexReset        *CodexResetState        `json:"codex_reset_updates,omitempty"`
 	// CooldownNotices maps an auth index to the end of the stale CPA
 	// cooldown that was already notified, in Unix seconds.
 	CooldownNotices map[string]int64 `json:"cooldown_notices,omitempty"`
@@ -291,6 +297,7 @@ func (s *State) Target(id string) *TargetState {
 // replaces the old file, so a crash never leaves a partly written state.
 type StateFile struct {
 	Path string
+	Now  func() time.Time
 	mu   sync.Mutex
 }
 
@@ -310,6 +317,7 @@ func (f *StateFile) Load() (state *State, fresh bool, err error) {
 		return NewState(), true, fmt.Errorf("state file is corrupt; rebuilt empty state: %w", err)
 	}
 	state.ensure()
+	f.pruneRefused(state)
 	state.restoreActiveWindows()
 	return state, false, nil
 }
@@ -359,6 +367,7 @@ func (s *State) restoreActiveWindows() {
 func (f *StateFile) Save(state *State) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
+	f.pruneRefused(state)
 	raw, err := json.MarshalIndent(state, "", "  ")
 	if err != nil {
 		return err
@@ -371,4 +380,49 @@ func (f *StateFile) Save(state *State) error {
 		return err
 	}
 	return os.Rename(tmp, f.Path)
+}
+
+// ResetObservation is the last observed reset of an ignition window.
+type ResetObservation = Observation
+
+// IgnitionWindowState records scheduling progress for one provider window ID.
+type IgnitionWindowState struct {
+	RollingReset     bool              `json:"rolling_reset,omitempty"`
+	ResetObservation *ResetObservation `json:"reset_observation,omitempty"`
+	LastSuccessEpoch int64             `json:"last_success_epoch,omitempty"`
+	LastAttemptEpoch int64             `json:"last_attempt_epoch,omitempty"`
+	PulsedResetEpoch int64             `json:"pulsed_reset_epoch,omitempty"`
+}
+
+// IgnitionWindow returns state for an observed window. Only a 5h window can
+// inherit the legacy target schedule; existing window entries take precedence.
+func (t *TargetState) IgnitionWindow(id string, fiveHour bool) *IgnitionWindowState {
+	if t.Windows == nil {
+		t.Windows = map[string]*IgnitionWindowState{}
+	}
+	w := t.Windows[id]
+	if w == nil {
+		w = &IgnitionWindowState{}
+		if fiveHour {
+			w.RollingReset, w.ResetObservation = t.RollingReset, t.ResetObservation
+			w.LastSuccessEpoch, w.LastAttemptEpoch = int64(t.LastSuccessEpoch), int64(t.LastAttemptEpoch)
+		}
+		t.Windows[id] = w
+	}
+	if fiveHour {
+		t.RollingReset, t.ResetObservation = false, nil
+	}
+	return w
+}
+
+func (f *StateFile) pruneRefused(state *State) {
+	now := time.Now()
+	if f.Now != nil {
+		now = f.Now()
+	}
+	for key, at := range state.RefusedModels {
+		if now.Sub(at) >= 24*time.Hour {
+			delete(state.RefusedModels, key)
+		}
+	}
 }

@@ -243,3 +243,22 @@ func TestParseAccountWeightsDropsInvalidWeights(t *testing.T) {
 		t.Fatalf("account weights %v", cfg.AccountWeights)
 	}
 }
+
+func TestPricingConfigDefaultsBoundsAndAccountModels(t *testing.T) {
+	for _, tc := range []struct {
+		raw   string
+		hours int
+	}{
+		{"", 24}, {"pricing: {}", 24}, {"pricing: {refresh_hours: 0}", 0},
+		{"pricing: {refresh_hours: 168}", 168}, {"pricing: {refresh_hours: 999}", 168}, {"pricing: {refresh_hours: -1}", 0},
+	} {
+		cfg, err := Parse([]byte(tc.raw))
+		if err != nil || cfg.Pricing.RefreshHours != tc.hours {
+			t.Fatalf("%q: hours=%d err=%v", tc.raw, cfg.Pricing.RefreshHours, err)
+		}
+	}
+	cfg, err := Parse([]byte("account_models:\n  sample.json:\n    'claude:3:claude:main': claude-haiku-5-5\n"))
+	if err != nil || cfg.AccountModels["sample.json"]["claude:3:claude:main"] != "claude-haiku-5-5" {
+		t.Fatalf("account models: %+v %v", cfg.AccountModels, err)
+	}
+}

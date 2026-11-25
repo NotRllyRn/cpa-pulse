@@ -74,3 +74,25 @@ func TestOverrideMustExist(t *testing.T) {
 		t.Fatal("unknown override must fail")
 	}
 }
+
+func TestEligibilityIncludesAllClaudeTextModels(t *testing.T) {
+	ids := []string{"claude-opus-5-5", "claude-opus-5-5-thinking", "claude-future-7", "claude-opus-5-5", "claude-image-1", "gpt-5-nano"}
+	want := []string{"claude-opus-5-5", "claude-opus-5-5-thinking", "claude-future-7"}
+	if got := EligibleModels(claude, "Claude", ids); !reflect.DeepEqual(got, want) {
+		t.Fatalf("eligible: %v", got)
+	}
+	if got, err := Candidates(claude, "Claude", "", ids); err != nil || !reflect.DeepEqual(got, want) {
+		t.Fatalf("default order: %v %v", got, err)
+	}
+	for _, provider := range []*Provider{kimi, xai} {
+		if got := EligibleModels(provider, "", ids); len(got) != 0 {
+			t.Fatalf("monitor-only provider: %v", got)
+		}
+	}
+	if got := EligibleModels(antigravity, "Gemini", []string{"claude-opus-5-5", "gemini-4-neon", "gpt-5-nano"}); !reflect.DeepEqual(got, []string{"gemini-4-neon"}) {
+		t.Fatalf("Gemini group: %v", got)
+	}
+	if got := EligibleModels(antigravity, "Claude / GPT", []string{"claude-opus-5-5", "gemini-4-neon", "gpt-oss-120b"}); !reflect.DeepEqual(got, []string{"claude-opus-5-5", "gpt-oss-120b"}) {
+		t.Fatalf("Claude/GPT group: %v", got)
+	}
+}

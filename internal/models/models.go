@@ -88,6 +88,7 @@ func (l *Lister) List(ctx context.Context, baseURL, apiKey string) ([]string, er
 			ids = append(ids, id)
 		}
 	}
+	ids = Unique(ids)
 	l.mu.Lock()
 	l.cached = append([]string(nil), ids...)
 	l.fetched = time.Now()

@@ -20,14 +20,11 @@ const (
 	freshQuotaAge = 15 * time.Minute
 )
 
-// exhaustedWindow returns a window of the group other than the 5-hour one
+// exhaustedWindow returns a window of the group
 // that is used up and has not reset yet. While it lasts, every request on
 // the account is rejected, so ignition waits for it.
 func exhaustedWindow(g GroupView, now time.Time) (WindowView, bool) {
 	for _, w := range g.Windows {
-		if quota.IsFiveHour(w.Window) {
-			continue
-		}
 		if w.Remaining <= notify.ExhaustedRemaining && (w.Reset.IsZero() || w.Reset.After(now)) {
 			return w, true
 		}
@@ -45,11 +42,10 @@ func staleCooldown(cred *Cred, groups []*GroupView, now time.Time) bool {
 		return false
 	}
 	for _, g := range groups {
-		five, ok := g.fiveHour()
-		if !ok {
+		if len(g.Windows) == 0 {
 			continue
 		}
-		fresh := now.Sub(five.ObservedAt) <= freshQuotaAge
+		fresh := true
 		available := true
 		for _, w := range g.Windows {
 			if w.Remaining <= notify.ExhaustedRemaining {
@@ -114,4 +110,22 @@ func (e *Engine) checkCooldowns(ctx context.Context, cfg config.Config) {
 			e.notified("", msg)
 		}
 	}
+}
+
+// exhaustedRetryReset exposes a retry only when all exhausted windows are
+// short windows with a known reset. Execution still waits for exhaustion to end.
+func exhaustedRetryReset(g GroupView, now time.Time) time.Time {
+	var reset time.Time
+	for _, w := range g.Windows {
+		if w.Remaining > notify.ExhaustedRemaining || (!w.Reset.IsZero() && !w.Reset.After(now)) {
+			continue
+		}
+		if !quota.IsFiveHour(w.Window) || w.Reset.IsZero() {
+			return time.Time{}
+		}
+		if w.Reset.After(reset) {
+			reset = w.Reset
+		}
+	}
+	return reset
 }

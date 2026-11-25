@@ -269,8 +269,10 @@ func antigravityBucketLabel(bucket map[string]any) string {
 	case window == "5h" || window == "five-hour" || window == "five_hour" ||
 		low == "5 hour limit" || low == "5-hour limit" || low == "five hour limit":
 		return quota.LabelFiveHour
-	case window == "weekly" || window == "week" || low == "weekly limit":
+	case window == "weekly" || window == "week" || window == "7d" || low == "weekly limit":
 		return quota.LabelSevenDay
+	case window == "30d" || window == "30-day" || window == "thirty_day":
+		return quota.LabelThirtyDay
 	case raw != "":
 		return raw
 	case window != "":
@@ -354,8 +356,10 @@ func ParseAntigravityQuota(payload map[string]any) ([]quota.RawGroup, error) {
 			switch windowRaw {
 			case "5h", "five-hour", "five_hour":
 				order, period = 0, quota.FiveHours
-			case "weekly", "week":
+			case "weekly", "week", "7d":
 				order, period = 1, quota.SevenDays
+			case "30d", "30-day", "thirty_day":
+				order, period = 2, quota.ThirtyDays
 			}
 			windows = append(windows, ordered{order: order, w: quota.Window{
 				ID:        id,

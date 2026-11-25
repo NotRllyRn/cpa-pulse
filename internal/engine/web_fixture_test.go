@@ -10,6 +10,7 @@ import (
 
 	"github.com/NotRllyRn/cpa-pulse/internal/config"
 	"github.com/NotRllyRn/cpa-pulse/internal/mcp"
+	"github.com/NotRllyRn/cpa-pulse/internal/providers"
 	"github.com/NotRllyRn/cpa-pulse/internal/quota"
 	"gopkg.in/yaml.v3"
 )
@@ -58,6 +59,9 @@ func TestWebPreviewFixture(t *testing.T) {
 		} {
 			remaining := 100 - (100-account.remaining)*float64(i)/72
 			windows := []quota.Window{{ID: quota.WindowSevenDay, Label: "7d", Period: 7 * 24 * time.Hour, Remaining: account.remaining, Reset: now.Add(3 * 24 * time.Hour)}}
+			if account.index == "2" {
+				windows = append(windows, quota.Window{ID: quota.WindowThirtyDay, Label: "30 days", Period: quota.ThirtyDays, Remaining: 72, Reset: now.Add(20 * 24 * time.Hour)})
+			}
 			// The second Codex account loses its 5h window two hours ago.
 			if account.index != "2" || i < 48 {
 				windows = append(windows, quota.Window{ID: quota.WindowFiveHour, Label: "5h", Period: 5 * time.Hour, Remaining: remaining, Reset: now.Add(time.Hour)})
@@ -70,6 +74,15 @@ func TestWebPreviewFixture(t *testing.T) {
 		{Key: "gemini", SourceLabel: "Gemini", Windows: []quota.Window{{ID: quota.WindowFiveHour, Label: "5h", Period: 5 * time.Hour, Remaining: 100, Reset: now.Add(time.Hour)}}},
 		{Key: "cg", SourceLabel: "Claude / GPT", Windows: []quota.Window{{ID: quota.WindowFiveHour, Label: "5h", Period: 5 * time.Hour, Remaining: 65, Reset: now.Add(time.Hour)}}},
 	}, quota.SourceActive, now, now, false)
+	e.noteModels([]string{"gpt-5.6-luna", "gpt-6.1-terra", "claude-haiku-5-5", "claude-sonnet-5-5", "claude-opus-5-5", "gemini-3.8-flash", "gemini-4-neon"}, nil)
+	for _, group := range e.groups {
+		candidates := rankedModels(e.priceManager(), providers.Lookup(group.Provider), group.SourceLabel, e.availableModels, "")
+		if len(candidates) > 0 {
+			ts := e.state.Target(group.Key)
+			ts.LastSuccessfulModel, ts.ConfirmedModel = candidates[0], candidates[0]
+			e.publishModelState(group.Key)
+		}
+	}
 	e.running, e.lastPoll, e.nextPoll = true, now, now.Add(5*time.Minute)
 	listener := mcp.New(NewMCPBackend(e), "0.8.0-preview")
 	defer listener.Close()
@@ -79,7 +92,17 @@ func TestWebPreviewFixture(t *testing.T) {
 		cfg := parse()
 		e.Configure(cfg, nil)
 		listener.Configure(cfg.MCPEnabled, cfg.MCPListen, cfg.MCPKey)
+		e.refreshTargets(cfg)
 		status := e.Status()
+		kinds := map[string]bool{}
+		for _, target := range status.Targets {
+			for _, window := range target.Windows {
+				kinds[window.Kind] = true
+			}
+		}
+		if !kinds["5h"] || !kinds["7d"] || !kinds["30d"] {
+			t.Fatalf("preview requires all window schedules: %v", kinds)
+		}
 		status.MCP = listener.State()
 		if status.Config.Webhook.URL != "" || status.Config.BarkURL != "set" || status.Config.MCPKey != "" {
 			t.Fatalf("unexpected redaction: %+v", status.Config)
@@ -92,7 +115,18 @@ func TestWebPreviewFixture(t *testing.T) {
 		if err := json.Unmarshal(b, &saved); err != nil {
 			t.Fatal(err)
 		}
-		snapshots[name] = map[string]any{"raw": saved, "status": status}
+		snapshots[name] = map[string]any{"raw": saved, "status": status, "prices": e.Prices()}
+		found := false
+		for _, account := range status.Accounts {
+			for _, group := range account.Groups {
+				if group.EstimatedCheapestModel != "" && group.EstimatedCheapestCostUSD > 0 && group.ConfirmedModel != "" && len(group.AvailableModels) > 0 {
+					found = true
+				}
+			}
+		}
+		if !found {
+			t.Fatal("pricing fixture requires a priced available model and confirmed success")
+		}
 	}
 	capture("default")
 	raw["mcp_enabled"], raw["mcp_key"] = true, "cpa_pulse_preview_fixture"
@@ -112,7 +146,7 @@ func TestWebPreviewFixture(t *testing.T) {
 		t.Fatal("empty MCP key must stop the listener and report an error")
 	}
 	histories := map[string]HistoryResponse{}
-	for _, kind := range []string{"5h", "7d"} {
+	for _, kind := range []string{"5h", "7d", "30d"} {
 		history, err := e.History(6*time.Hour, kind)
 		if err != nil || len(history.Series) == 0 {
 			t.Fatalf("%s history: %v", kind, err)
@@ -141,7 +175,7 @@ func TestWebPreviewFixture(t *testing.T) {
 		if err := os.MkdirAll(dir, 0755); err != nil {
 			t.Fatal(err)
 		}
-		b, err := json.MarshalIndent(map[string]any{"snapshots": snapshots, "history": histories}, "", "  ")
+		b, err := json.MarshalIndent(map[string]any{"snapshots": snapshots, "history": histories, "prices": e.Prices()}, "", "  ")
 		if err != nil {
 			t.Fatal(err)
 		}

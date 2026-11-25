@@ -224,8 +224,8 @@ func TestActivePoolDisappearanceAndPassiveTombstone(t *testing.T) {
 	raw[0].Windows[0].Reset = c.t.Add(5 * time.Hour)
 	apply(raw, quota.SourceActive)
 	e.refreshTargets(cfg)
-	if len(e.Status().Targets) != 0 {
-		t.Fatal("disabled ignition produced targets")
+	if targets := e.Status().Targets; len(targets) != 0 {
+		t.Fatal("disabled ignition must not expose manual ignition targets")
 	}
 	result, err := NewMCPBackend(e).list(map[string]string{"provider": "codex"})
 	if err != nil {

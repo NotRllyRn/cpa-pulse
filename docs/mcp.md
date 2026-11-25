@@ -87,6 +87,10 @@ quotas.example.com {
 | `refresh_quotas(account?)` | Active query, globally limited to once per 60 seconds; returns remaining wait seconds when throttled and waits at most 180 seconds for results |
 | `get_quota_events(since?, limit?)` | Recent reset, exhaustion, ignition success/failure, and credential problem (invalid credential, suspended account, rate limit) and recovery events; `since` is an RFC3339 timestamp with timezone and `limit` an integer from 1 to 100 |
 
+`get_quota_history` accepts the [management history ranges](architecture.md#cpa-interface), including `31d`, `61d`, `90d` and `151d`, with a default of `24h`. `window` accepts `5h`, `7d`, `30d` or an exact window ID. History retention limits the available data.
+
+`list_quotas` forecasts `7d` and `30d` windows using this cycle's average consumption; `5h` windows use a recent consumption rate.
+
 Each MCP server instance executes at most four tool calls concurrently, including calls within a batch. Additional calls immediately receive a JSON-RPC `-32000` busy error and may be retried later. Query tools have a 10-second timeout; `refresh_quotas` has a 180-second timeout.
 
 MCP account labels use the first line of the note when present, first masking complete emails of all known accounts, then masking every remaining non-whitespace segment containing `@`. Quotes are removed from the user name before keeping its last two characters. Without a note name, the label is `***` plus the last two characters of the email user name, for example `***rk`; shorter user names keep all their characters. The domain and user-name length are not returned. Accounts without a note name or email use `account-number`. Labels that are identical after masking receive `#1`, `#2` and further suffixes, avoiding every base label and previously generated label so that each complete label identifies one account. `retired account` is reserved for retired accounts; a current account with that base label also receives a suffix. Current quotas, earliest account exhaustion, history and events all use these labels and never return full emails. This rule is independent of the page's blur switch.

@@ -691,25 +691,46 @@ func (e *Engine) applyGroups(ctx context.Context, cfg config.Config, cred *Cred,
 				}
 			}
 		}
-		if w, ok := group.fiveHour(); ok {
-			target := e.state.Target(group.Key)
-			startKnown := source == quota.SourcePassive || target.ResetObservation != nil || w.Reset.Sub(now) < quota.FiveHours-2*time.Minute
-			ignite.Observe(target, w.Reset, now, source == quota.SourcePassive)
+		target := e.state.Target(group.Key)
+		confirmedFixed := make(map[string]bool, len(group.Windows))
+		for _, w := range group.Windows {
+			if quota.Class(w.Window) == "" {
+				continue
+			}
+			ws := target.IgnitionWindow(w.ID, quota.IsFiveHour(w.Window))
+			prev := ws.ResetObservation
+			confirmedFixed[w.ID] = w.Source == quota.SourcePassive || (!ws.RollingReset && prev != nil && prev.ResetEpoch != nil &&
+				epochTime(*prev.ResetEpoch).After(now) && now.Sub(epochTime(prev.SeenEpoch)) >= 2*time.Second)
+			// Passive snapshots can retain siblings read by an older request.
+			if w.Source != source || !w.ObservedAt.Equal(now) {
+				continue
+			}
+			startKnown := source == quota.SourcePassive || ws.ResetObservation != nil || w.Reset.Sub(now) < quota.Period(w.Window)-2*time.Minute
+			ignite.ObserveWindow(ws, w.Reset, now, source == quota.SourcePassive, quota.Period(w.Window))
+			if quota.IsFiveHour(w.Window) {
+				e.mu.Lock()
+				if live := e.groups[group.Key]; live != nil {
+					live.rolling, live.startKnown = ws.RollingReset, startKnown
+				}
+				e.mu.Unlock()
+			}
+		}
+		allActive, enabled := true, false
+		for _, w := range group.Windows {
+			if !cfg.Ignition.WindowEnabled(quota.Class(w.Window)) || !providers.Pulseable(group.Provider, group.SourceLabel, w.Window) {
+				continue
+			}
+			enabled = true
+			ws := target.IgnitionWindow(w.ID, quota.IsFiveHour(w.Window))
+			allActive = allActive && confirmedFixed[w.ID] && !ws.RollingReset && !w.Reset.IsZero() && w.Reset.After(now)
+		}
+		if cfg.Ignition.Enabled && groupIgnitable(cfg, group.Provider, group.SourceLabel) && enabled && allActive {
+			ignite.ClearFailures(target)
+		}
+		if _, ok := group.fiveHour(); !ok && source == quota.SourceActive {
 			e.mu.Lock()
 			if live := e.groups[group.Key]; live != nil {
-				live.rolling = target.RollingReset
-				live.startKnown = startKnown
-			}
-			e.mu.Unlock()
-		} else if source == quota.SourceActive {
-			if target := e.state.Scheduler[group.Key]; target != nil {
-				target.ResetObservation = nil
-				target.RollingReset = false
-			}
-			e.mu.Lock()
-			if live := e.groups[group.Key]; live != nil {
-				live.startKnown = false
-				live.rolling = false
+				live.startKnown, live.rolling = false, false
 			}
 			e.mu.Unlock()
 		}

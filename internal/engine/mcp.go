@@ -425,6 +425,9 @@ func forecastWindowContext(ctx context.Context, w WindowStatus, target TargetVie
 	if w.Kind == quota.KindSevenDay {
 		period = quota.SevenDays
 	}
+	if w.Kind == quota.KindThirtyDay && period == 0 {
+		period = quota.ThirtyDays
+	}
 	if period == 0 || w.Reset.IsZero() {
 		return dto, nil
 	}
@@ -437,9 +440,9 @@ func forecastWindowContext(ctx context.Context, w WindowStatus, target TargetVie
 	if !started {
 		return dto, nil
 	}
-	if w.Kind == quota.KindSevenDay {
+	if w.Kind == quota.KindSevenDay || w.Kind == quota.KindThirtyDay {
 		expected := min(100.0, max(0.0, 100*w.Reset.Sub(now).Seconds()/period.Seconds()))
-		dto.Pace = map[string]float64{"expected_remaining_percent": expected, "actual_remaining_percent": w.Remaining, "difference_percent": w.Remaining - expected, "even_budget_percent_per_day": 100.0 / 7, "remaining_budget_percent_per_day": w.Remaining / (w.Reset.Sub(now).Hours() / 24)}
+		dto.Pace = map[string]float64{"expected_remaining_percent": expected, "actual_remaining_percent": w.Remaining, "difference_percent": w.Remaining - expected, "even_budget_percent_per_day": 100.0 / (period.Hours() / 24), "remaining_budget_percent_per_day": w.Remaining / (w.Reset.Sub(now).Hours() / 24)}
 	}
 	if dto.Stale {
 		return dto, nil
@@ -451,7 +454,7 @@ func forecastWindowContext(ctx context.Context, w WindowStatus, target TargetVie
 	}
 	rate := 0.0
 	base := now
-	if w.Kind == quota.KindSevenDay {
+	if w.Kind == quota.KindSevenDay || w.Kind == quota.KindThirtyDay {
 		rate = max(0.0, (100-w.Remaining)/now.Sub(start).Hours())
 	} else {
 		var floor [][3]float64
@@ -602,7 +605,7 @@ func (b *MCPBackend) history(ctx context.Context, args map[string]string) (any, 
 			return false
 		}
 		window := args["window"]
-		if window != "" && window != "5h" && window != "7d" && record.Window != window {
+		if window != "" && window != "5h" && window != "7d" && window != "30d" && record.Window != window {
 			return false
 		}
 		if args["account"] == "" {
@@ -668,7 +671,7 @@ func (b *MCPBackend) history(ctx context.Context, args map[string]string) (any, 
 		if groupLabel == "" {
 			groupLabel = "retired quota pool"
 		}
-		if !ok || remaining < 2 || (args["window"] != "" && args["window"] != "5h" && args["window"] != "7d" && series.Window != args["window"]) {
+		if !ok || remaining < 2 || (args["window"] != "" && args["window"] != "5h" && args["window"] != "7d" && args["window"] != "30d" && series.Window != args["window"]) {
 			continue
 		}
 		points := downsample(series.Points, min(200, remaining))

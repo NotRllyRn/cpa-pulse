@@ -248,7 +248,7 @@ func TestParseCodexUsageKeepsOtherLengthsApart(t *testing.T) {
 		t.Fatal(err)
 	}
 	w := groups[0].Windows
-	if len(w) != 2 || w[0].ID != quota.WindowFiveHour || w[1].ID != "window-30d" || w[1].Label != "30d" || quota.Kind(w[1]) != "" {
+	if len(w) != 2 || w[0].ID != quota.WindowFiveHour || w[1].ID != "window-30d" || w[1].Label != "30d" || quota.Kind(w[1]) != quota.KindThirtyDay {
 		t.Fatalf("windows %+v", w)
 	}
 	header := http.Header{
@@ -516,7 +516,7 @@ func TestParseXAIBillingKeepsOneIDForOtherPeriods(t *testing.T) {
 		`{"config":{"creditUsagePercent":10,"billingPeriodStart":"2026-03-01T00:00:00Z","billingPeriodEnd":"2026-04-01T00:00:00Z"}}`,
 	} {
 		groups, err := ParseXAIBilling(decode(t, body))
-		if err != nil || groups[0].Windows[0].ID != "credits" || quota.Kind(groups[0].Windows[0]) != "" {
+		if err != nil || groups[0].Windows[0].ID != "credits" || quota.Kind(groups[0].Windows[0]) != quota.KindThirtyDay {
 			t.Fatalf("%s: %+v %v", body, groups, err)
 		}
 	}

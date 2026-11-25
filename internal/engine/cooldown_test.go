@@ -21,8 +21,8 @@ func TestExhaustedSevenDayBlocksIgnition(t *testing.T) {
 	if !blocked || !w.Reset.Equal(reset) {
 		t.Fatalf("a used-up 7-day window must block until its reset, got %v %v", blocked, w)
 	}
-	if _, blocked := exhaustedWindow(claudeGroup(now, 0, 40, reset), now); blocked {
-		t.Fatal("a used-up 5-hour window is what ignition waits for, not a block")
+	if _, blocked := exhaustedWindow(claudeGroup(now, 0, 40, reset), now); !blocked {
+		t.Fatal("a used-up 5-hour window must block until its reset")
 	}
 	if _, blocked := exhaustedWindow(claudeGroup(now, 100, 0, now.Add(-time.Minute)), now); blocked {
 		t.Fatal("a 7-day window past its reset must not block")

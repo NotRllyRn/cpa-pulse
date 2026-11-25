@@ -1,9 +1,6 @@
-// Package ignite decides when to start the next 5-hour quota window and keeps
-// the failure protection state.
-//
-// A 5-hour window starts with the first request after a reset. cpa-pulse
-// sends a minimal request at reset plus a grace period, inside a daily time
-// window, so that the next window starts right away.
+// Package ignite schedules usage-triggered quota windows and keeps shared
+// request failure protection. Requests run after reset plus grace, inside
+// the configured daily hours.
 package ignite
 
 import (
@@ -17,6 +14,7 @@ import (
 	"github.com/NotRllyRn/cpa-pulse/internal/config"
 	"github.com/NotRllyRn/cpa-pulse/internal/failure"
 	"github.com/NotRllyRn/cpa-pulse/internal/host"
+	"github.com/NotRllyRn/cpa-pulse/internal/quota"
 	"github.com/NotRllyRn/cpa-pulse/internal/store"
 )
 
@@ -25,7 +23,6 @@ import (
 // observation. A started window has a fixed reset time. Two observations tell
 // them apart.
 const (
-	rollingWindow            = 5 * time.Hour
 	rollingOffsetTolerance   = 120 * time.Second
 	rollingMinObservation    = 2 * time.Second
 	rollingDriftTolerance    = 3 * time.Second
@@ -74,54 +71,74 @@ func epoch(t time.Time) float64 {
 // HeldUntil returns the end of the post-success hold or of the retry delay,
 // or the zero time when the target is not held.
 func (s Schedule) HeldUntil(ts *store.TargetState, now time.Time) time.Time {
-	if ts.LastSuccessEpoch > 0 {
-		hold := epochTime(ts.LastSuccessEpoch).Add(time.Duration(s.Cfg.PostSuccessHoldSeconds) * time.Second)
-		if now.Before(hold) {
-			return hold
+	var until time.Time
+	for _, candidate := range []time.Time{
+		epochTime(ts.LastSuccessEpoch).Add(time.Duration(s.Cfg.PostSuccessHoldSeconds) * time.Second),
+		epochTime(ts.RetryAtEpoch), epochTime(ts.CircuitOpenUntilEpoch),
+	} {
+		if candidate.After(now) && candidate.After(until) {
+			until = candidate
 		}
 	}
-	if retry := epochTime(ts.RetryAtEpoch); retry.After(now) {
-		return retry
-	}
-	return time.Time{}
+	return until
 }
 
-// DueAt returns when the target should be ignited next. reset is the current
-// 5-hour reset time, or zero when unknown.
-func (s Schedule) DueAt(ts *store.TargetState, reset, now time.Time) time.Time {
-	localNow, start, end := s.bounds(now)
-	if localNow.Before(start) {
+// activeAt moves a candidate forward into the configured daily hours.
+func (s Schedule) activeAt(candidate time.Time) time.Time {
+	local, start, end := s.bounds(candidate)
+	if local.Before(start) {
+		// Overnight hours may belong to the preceding day's interval.
+		_, previousStart, previousEnd := s.bounds(candidate.In(s.Loc).AddDate(0, 0, -1))
+		if !local.Before(previousStart) && !local.After(previousEnd) {
+			return candidate.UTC()
+		}
 		return start.UTC()
 	}
-	if localNow.After(end) {
-		return s.NextDailyStart(now)
+	if local.After(end) {
+		return s.NextDailyStart(candidate)
 	}
-	hold := s.HeldUntil(ts, now)
-	if ts.RollingReset {
-		if !hold.IsZero() {
-			return hold
-		}
-		return now
-	}
-	if !reset.IsZero() && reset.After(now) {
-		target := reset.Add(time.Duration(s.Cfg.GraceSeconds) * time.Second)
-		targetLocal := target.In(s.Loc)
-		sameDay := targetLocal.Year() == localNow.Year() && targetLocal.YearDay() == localNow.YearDay()
-		if sameDay && !targetLocal.Before(start) && !targetLocal.After(end) {
-			return target.UTC()
-		}
-		return s.NextDailyStart(now)
-	}
-	if !hold.IsZero() {
-		return hold
-	}
-	return now
+	return candidate.UTC()
 }
 
-// Observe records one 5-hour reset observation and returns whether the
-// window is a rolling placeholder. A fixed future reset clears the failure
-// state, because it shows that the window is running.
+// DueAt returns the reset plus grace, constrained by shared protection and
+// daily hours. A future reset is never replaced by an earlier daily start.
+func (s Schedule) DueAt(ts *store.TargetState, reset, now time.Time) time.Time {
+	candidate := now
+	if !ts.RollingReset && !reset.IsZero() {
+		if ready := reset.Add(time.Duration(s.Cfg.GraceSeconds) * time.Second); ready.After(candidate) {
+			candidate = ready
+		}
+	}
+	if hold := s.HeldUntil(ts, now); hold.After(candidate) {
+		candidate = hold
+	}
+	return s.activeAt(candidate)
+}
+
+// WindowDueAt returns the next eligible time of one observed window.
+// Long windows need a reset observation; serviced stale resets wait for new data.
+func (s Schedule) WindowDueAt(ts *store.TargetState, ws *store.IgnitionWindowState, w quota.Window, now time.Time) time.Time {
+	if quota.Class(w) == "" || (quota.Class(w) == "long" && w.Reset.IsZero()) {
+		return time.Time{}
+	}
+	if !w.Reset.IsZero() && ws.PulsedResetEpoch != 0 && w.Reset.Unix() == ws.PulsedResetEpoch {
+		return time.Time{}
+	}
+	state := *ts
+	state.RollingReset = ws.RollingReset
+	return s.DueAt(&state, w.Reset, now)
+}
+
+// Observe records one 5-hour reset observation without changing shared failures.
 func Observe(ts *store.TargetState, reset, now time.Time, passive bool) bool {
+	ws := &store.IgnitionWindowState{RollingReset: ts.RollingReset, ResetObservation: ts.ResetObservation}
+	rolling := ObserveWindow(ws, reset, now, passive, quota.FiveHours)
+	ts.RollingReset, ts.ResetObservation = ws.RollingReset, ws.ResetObservation
+	return rolling
+}
+
+// ObserveWindow detects rolling placeholders using the actual window period.
+func ObserveWindow(ts *store.IgnitionWindowState, reset, now time.Time, passive bool, period time.Duration) bool {
 	rolling := false
 	var resetEpoch *float64
 	if !reset.IsZero() {
@@ -131,10 +148,12 @@ func Observe(ts *store.TargetState, reset, now time.Time, passive bool) bool {
 		offset := reset.Sub(now)
 		// Passive observations come from a real request, which always starts
 		// the window, so they are never rolling.
-		if !passive && prev != nil && prev.ResetEpoch != nil && absDuration(offset-rollingWindow) <= rollingOffsetTolerance {
+		if !passive && prev != nil && prev.ResetEpoch != nil {
 			elapsed := time.Duration((epoch(now) - prev.SeenEpoch) * float64(time.Second))
 			shift := time.Duration((value - *prev.ResetEpoch) * float64(time.Second))
-			if elapsed >= rollingMinObservation {
+			if elapsed < rollingMinObservation {
+				rolling = ts.RollingReset
+			} else if absDuration(offset-period) <= rollingOffsetTolerance {
 				tolerance := time.Duration(float64(elapsed) * 0.02)
 				if tolerance < rollingDriftTolerance {
 					tolerance = rollingDriftTolerance
@@ -147,9 +166,6 @@ func Observe(ts *store.TargetState, reset, now time.Time, passive bool) bool {
 		}
 	}
 	ts.RollingReset = rolling
-	if !rolling && !reset.IsZero() && reset.After(now) {
-		ClearFailures(ts)
-	}
 	ts.ResetObservation = &store.Observation{SeenEpoch: epoch(now), ResetEpoch: resetEpoch}
 	return rolling
 }
@@ -310,9 +326,8 @@ const (
 	Unsupported
 )
 
-// ErrNotConfirmed means the request returned but no fixed 5-hour reset was
-// observed afterwards.
-var ErrNotConfirmed = errors.New("ignition request returned without a confirmed fixed 5-hour reset")
+// ErrNotConfirmed means one or more requested windows could not be confirmed.
+var ErrNotConfirmed = errors.New("ignition request returned without confirming all due quota windows")
 
 // ErrNoModel means CPA rejected every candidate model for the credential.
 var ErrNoModel = errors.New("no candidate ignition model is available for this credential")

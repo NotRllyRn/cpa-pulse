@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"log"
 	"math"
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -35,17 +36,22 @@ type Provider struct {
 	Models  map[string]string `yaml:"models,omitempty" json:"models,omitempty"`
 }
 
+type Pricing struct {
+	RefreshHours int `yaml:"refresh_hours" json:"refresh_hours"`
+}
+
 // Ignition holds the daily ignition window and failure protection settings.
 type Ignition struct {
-	Enabled                  bool `yaml:"enabled" json:"enabled"`
-	StartHour                int  `yaml:"start_hour" json:"start_hour"`
-	EndHour                  int  `yaml:"end_hour" json:"end_hour"`
-	EndGraceMinutes          int  `yaml:"end_grace_minutes" json:"end_grace_minutes"`
-	GraceSeconds             int  `yaml:"grace_seconds" json:"grace_seconds"`
-	FailureRetrySeconds      int  `yaml:"failure_retry_seconds" json:"failure_retry_seconds"`
-	MaxTransientFailures     int  `yaml:"max_transient_failures" json:"max_transient_failures"`
-	FailureBackoffMultiplier int  `yaml:"failure_backoff_multiplier" json:"failure_backoff_multiplier"`
-	PostSuccessHoldSeconds   int  `yaml:"post_success_hold_seconds" json:"post_success_hold_seconds"`
+	Windows                  []string `yaml:"windows" json:"windows"`
+	Enabled                  bool     `yaml:"enabled" json:"enabled"`
+	StartHour                int      `yaml:"start_hour" json:"start_hour"`
+	EndHour                  int      `yaml:"end_hour" json:"end_hour"`
+	EndGraceMinutes          int      `yaml:"end_grace_minutes" json:"end_grace_minutes"`
+	GraceSeconds             int      `yaml:"grace_seconds" json:"grace_seconds"`
+	FailureRetrySeconds      int      `yaml:"failure_retry_seconds" json:"failure_retry_seconds"`
+	MaxTransientFailures     int      `yaml:"max_transient_failures" json:"max_transient_failures"`
+	FailureBackoffMultiplier int      `yaml:"failure_backoff_multiplier" json:"failure_backoff_multiplier"`
+	PostSuccessHoldSeconds   int      `yaml:"post_success_hold_seconds" json:"post_success_hold_seconds"`
 }
 
 // CodexResetUpdates controls forwarding of Did Codex Reset signals.
@@ -107,14 +113,16 @@ type Webhook struct {
 
 // Config is the effective plugin configuration.
 type Config struct {
-	ConfigToken       string  `yaml:"config_token" json:"config_token"`
-	BarkURL           string  `yaml:"bark_url" json:"bark_url"`
-	BarkGroup         string  `yaml:"bark_group" json:"bark_group"`
-	BarkIcon          string  `yaml:"bark_icon" json:"bark_icon"`
-	Webhook           Webhook `yaml:"webhook" json:"webhook"`
-	NoticeThreshold   float64 `yaml:"notice_threshold" json:"notice_threshold"`
-	LowThreshold      float64 `yaml:"low_threshold" json:"low_threshold"`
-	CriticalThreshold float64 `yaml:"critical_threshold" json:"critical_threshold"`
+	Pricing           Pricing                      `yaml:"pricing" json:"pricing"`
+	AccountModels     map[string]map[string]string `yaml:"account_models,omitempty" json:"account_models,omitempty"`
+	ConfigToken       string                       `yaml:"config_token" json:"config_token"`
+	BarkURL           string                       `yaml:"bark_url" json:"bark_url"`
+	BarkGroup         string                       `yaml:"bark_group" json:"bark_group"`
+	BarkIcon          string                       `yaml:"bark_icon" json:"bark_icon"`
+	Webhook           Webhook                      `yaml:"webhook" json:"webhook"`
+	NoticeThreshold   float64                      `yaml:"notice_threshold" json:"notice_threshold"`
+	LowThreshold      float64                      `yaml:"low_threshold" json:"low_threshold"`
+	CriticalThreshold float64                      `yaml:"critical_threshold" json:"critical_threshold"`
 	// RecoveryNotify and ResetReminder hold one mode per window kind.
 	RecoveryNotify WindowModes `yaml:"recovery_notify" json:"recovery_notify"`
 	ResetReminder  WindowModes `yaml:"reset_reminder" json:"reset_reminder"`
@@ -185,6 +193,7 @@ func Default() Config {
 		defaults[id] = DefaultProvider(id)
 	}
 	return Config{
+		Pricing:               Pricing{RefreshHours: 24},
 		BarkGroup:             "CPA",
 		BarkIcon:              DefaultBarkIcon,
 		NoticeThreshold:       50,
@@ -200,6 +209,7 @@ func Default() Config {
 		MCPListen:             "127.0.0.1:8319",
 		Ignition: Ignition{
 			Enabled:                  true,
+			Windows:                  []string{"short", "long"},
 			StartHour:                7,
 			EndHour:                  22,
 			EndGraceMinutes:          30,
@@ -276,6 +286,19 @@ func Parse(raw []byte) (Config, error) {
 			cfg.Providers[key] = provider
 		}
 	}
+	if cfg.Ignition.Windows == nil {
+		cfg.Ignition.Windows = []string{"short", "long"}
+	}
+	windows := make([]string, 0, len(cfg.Ignition.Windows))
+	for _, window := range cfg.Ignition.Windows {
+		if window != "short" && window != "long" {
+			return Default(), fmt.Errorf("invalid ignition.windows value %q: use short or long", window)
+		}
+		if !slices.Contains(windows, window) {
+			windows = append(windows, window)
+		}
+	}
+	cfg.Ignition.Windows = windows
 	cfg.normalize()
 	return cfg, nil
 }
@@ -311,6 +334,7 @@ func mode(value string, allowed ...string) string {
 }
 
 func (c *Config) normalize() {
+	c.Pricing.RefreshHours = clamp(c.Pricing.RefreshHours, 0, 168)
 	c.BarkURL = strings.TrimRight(strings.TrimSpace(c.BarkURL), "/")
 	c.BarkGroup = strings.TrimSpace(c.BarkGroup)
 	c.BarkIcon = strings.TrimSpace(c.BarkIcon)
@@ -415,4 +439,9 @@ func (c Config) PollInterval() time.Duration {
 // RequestTimeout returns the timeout for one upstream HTTP request.
 func (c Config) RequestTimeout() time.Duration {
 	return time.Duration(c.RequestTimeoutSeconds) * time.Second
+}
+
+// WindowEnabled reports whether automatic ignition includes the class.
+func (c Ignition) WindowEnabled(class string) bool {
+	return c.Windows == nil || slices.Contains(c.Windows, class)
 }

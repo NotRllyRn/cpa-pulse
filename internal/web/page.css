@@ -624,3 +624,38 @@ table.services .sub-row td { border-bottom: none; padding-top: 4px; text-align: 
   .seg-thumb, .seg, .mode-option span { transition: none; } .seg-thumb.bounce { animation: none; }
   .ignition-params { transition: none; }
 }
+
+/* Pricing uses the dashboard's table, badge and form styles. */
+.prices-head { flex-wrap: wrap; }
+.prices-filters { align-items: end; margin-top: 16px; }
+.prices-filters label, .pulse-model label { display: flex; flex-direction: column; gap: 5px; font-size: 12px; color: var(--text-secondary); min-width: 0; }
+.prices-filters input, .prices-filters select { width: 100%; min-width: 0; }
+.prices-filters .prices-search { flex: 1; min-width: 180px; }
+#prices-interval { width: 120px; }
+#prices-count { margin: 14px 0 8px; }
+.prices-table { min-width: 790px; }
+.price-identity { display: flex; flex-direction: column; gap: 3px; min-width: 180px; }
+.price-identity .mono { overflow-wrap: anywhere; }
+.price-badges, .price-actions { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.price-badges .badge { white-space: normal; }
+.price-actions { min-width: 150px; }
+.price-editor { display: grid; grid-template-columns: 1fr 2fr 1fr 1fr; gap: 12px; margin-bottom: 12px; }
+.price-editor input { width: 100%; min-width: 0; }
+.price-editor .price-actions, #price-editor-error { grid-column: 1 / -1; }
+.pulse-model { display: flex; flex-direction: column; gap: 6px; min-width: 0; padding-top: 4px; }
+.pulse-model .mono { overflow-wrap: anywhere; }
+.pulse-model select { width: 100%; min-width: 0; font-size: 12px; }
+.pulse-model .badge { align-self: flex-start; white-space: normal; }
+.pulse-model .hint:empty { display: none; }
+.pulse-windows { display: flex; flex-direction: column; align-items: flex-start; gap: 7px; min-width: 0; }
+.pulse-window { display: flex; flex-wrap: wrap; align-items: baseline; gap: 3px 8px; min-width: 0; }
+.pulse-window .badge { white-space: normal; }
+.pulse-window .cell-note { overflow-wrap: anywhere; }
+.window-checks { margin-bottom: 16px; }
+.filters .segmented { max-width: 100%; flex-wrap: wrap; }
+@media (max-width: 600px) {
+  .price-editor { grid-template-columns: 1fr 1fr; }
+  .prices-filters > label { flex: 1 1 100%; }
+  #prices-interval { width: 100%; }
+  .view-nav { flex-wrap: wrap; }
+}

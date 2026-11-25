@@ -34,6 +34,7 @@
   <nav class="view-nav">
     <div class="segmented" id="view-buttons" role="group" aria-label="Page" data-i18n-aria-label="view_nav">
       <button type="button" class="seg" data-value="quota" aria-pressed="true" data-i18n="quota">Quota</button>
+      <button type="button" class="seg" data-value="prices" aria-pressed="false">Model Prices</button>
       <button type="button" class="seg" data-value="settings" aria-pressed="false" data-i18n="settings">Settings</button>
     </div>
     <!-- Blurs the account names for screenshots; page.js draws the icon. -->
@@ -56,7 +57,7 @@
     <div class="table-wrap">
       <table>
         <thead>
-          <tr><th data-i18n="col_group">Quota group</th><th data-i18n="col_next">Next ignition</th><th data-i18n="col_reset">Current reset</th><th data-i18n="col_last">Last success</th><th data-i18n="col_model">Model</th><th data-i18n="col_status">Status</th><th></th></tr>
+          <tr><th data-i18n="col_group">Quota group</th><th data-i18n="col_next">Next ignition</th><th data-i18n="col_reset">Current reset</th><th data-i18n="col_last">Last success</th><th data-i18n="col_model">Model</th><th data-i18n="col_status">Status</th></tr>
         </thead>
         <tbody id="targets"></tbody>
       </table>
@@ -70,6 +71,7 @@
       <div class="segmented" id="window-buttons" role="group" aria-label="Quota window" data-i18n-aria-label="chart_window">
         <button type="button" class="seg" data-value="5h" aria-pressed="true" data-i18n="quota_5h">5-hour quota</button>
         <button type="button" class="seg" data-value="7d" aria-pressed="false" data-i18n="quota_7d">7-day quota</button>
+        <button type="button" class="seg" data-value="30d" aria-pressed="false" data-i18n="quota_30d">30-day quota</button>
       </div>
       <div class="segmented" id="range-buttons" role="group" aria-label="Time range" data-i18n-aria-label="chart_range"></div>
       <div class="segmented" id="sort-buttons" role="group" aria-label="Order" data-i18n-aria-label="chart_sort">
@@ -118,6 +120,44 @@
     <div id="events" class="events" role="table" aria-label="Events" data-i18n-aria-label="events"></div>
     <button id="events-more" class="btn btn-ghost btn-sm events-more" type="button" hidden></button>
   </section>
+  </div>
+
+  <div id="view-prices" hidden>
+    <section class="card">
+      <div class="block-head prices-head">
+        <h2 class="block-title">Model Prices</h2>
+        <button id="prices-refresh" type="button" class="btn btn-secondary">Refresh Prices</button>
+      </div>
+      <p id="prices-meta" class="secondary" aria-live="polite">Prices have not loaded.</p>
+      <p id="prices-error" class="error-text" role="alert" hidden></p>
+      <div class="filters prices-filters">
+        <label>Show<select id="prices-scope"><option value="cpa">CPA Available / Relevant</option><option value="all">All Catalog Models</option></select></label>
+        <label class="prices-search">Search provider or model<input id="prices-search" type="search" autocomplete="off"></label>
+        <label>Refresh interval (hours)<input id="prices-interval" type="number" min="0" max="168" step="1" value="24" aria-describedby="prices-interval-hint"></label>
+      </div>
+      <p id="prices-interval-hint" class="hint">0 = manual only. Changes save automatically.</p>
+      <p id="prices-save-state" class="hint" role="status"></p>
+      <p id="prices-count" class="hint"></p>
+      <p id="prices-limit" class="hint" role="status" hidden></p>
+      <div class="table-wrap">
+        <table class="prices-table">
+          <thead><tr><th>Provider / Model ID</th><th class="num">Input ($/1M)</th><th class="num">Output ($/1M)</th><th class="num">Est. Pulse Cost</th><th>Status</th><th>Actions</th></tr></thead>
+          <tbody id="prices-rows"></tbody>
+        </table>
+      </div>
+    </section>
+    <section class="card">
+      <h2 id="price-editor-title" class="card-title">Add custom price</h2>
+      <form id="price-editor" class="price-editor">
+        <label>Provider<input name="provider" type="text" required autocomplete="off"></label>
+        <label>Model ID<input name="model" type="text" required autocomplete="off"></label>
+        <label>Input ($/1M)<input name="input" type="number" min="0" step="any" required></label>
+        <label>Output ($/1M)<input name="output" type="number" min="0" step="any" required></label>
+        <div class="price-actions"><button id="price-save" class="btn btn-primary" type="submit">Save price</button><button id="price-cancel" class="btn btn-ghost" type="button">Clear</button></div>
+        <p id="price-editor-error" class="error-text" role="alert" hidden></p>
+      </form>
+      <p class="hint">Add a price for an unpriced CPA model, or edit a table entry. Custom prices and removed models survive refreshes. Reset restores the fetched price.</p>
+    </section>
   </div>
 
   <!-- Settings save independently. One .save-state per section heading or
@@ -208,6 +248,10 @@
         </div>
         <div id="ignition-params" class="ignition-params">
           <p class="off-note" id="ignition-off" data-i18n="ignition_off" hidden>Ignition is off, so these settings do not apply for now.</p>
+          <div class="checks window-checks" role="group" aria-label="Pulse windows" data-i18n-aria-label="ignition_windows">
+            <label class="inline"><input name="ignition.windows" type="checkbox" value="short" checked><span data-i18n="ignition_short">Short windows (5h)</span></label>
+            <label class="inline"><input name="ignition.windows" type="checkbox" value="long" checked><span data-i18n="ignition_long">Long windows (7d / 30d)</span></label>
+          </div>
           <div class="grid-3">
             <label><span data-i18n="start_hour">Daily start (hour)</span><input name="ignition.start_hour" type="number" min="0" max="23"></label>
             <label><span data-i18n="end_hour">Daily end (hour)</span><input name="ignition.end_hour" type="number" min="0" max="23"></label>

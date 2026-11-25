@@ -2,7 +2,7 @@
 
 [Usage](usage.md) · [MCP](mcp.md)
 
-All plugin settings live under `plugins.configs.cpa-pulse` in `config.yaml`. CPA also requires global `plugins.enabled: true` and the plugin entry's `enabled: true`; CPA owns these enablement switches. On the management page, use the "Quota | Settings" switch at the top to open the settings view. Switches and checkboxes save when clicked; text and numbers save when you leave the field or press Enter. Save results appear to the right of section headings, or beside each group legend under "Advanced". The three alert thresholds save together and must be in descending order, with equal values allowed. Changes apply without a restart. A saved field shows "Saved; waiting to take effect", then "In effect" after the plugin confirms it; confirmation waits at most 15 seconds after the save succeeds, even if status requests hang. If still unconfirmed at the deadline, it shows "Not confirmed in effect"; a late confirmation does not change that wait result.
+All plugin settings live under `plugins.configs.cpa-pulse` in `config.yaml`. CPA also requires global `plugins.enabled: true` and the plugin entry's `enabled: true`; CPA owns these enablement switches. On the management page, use the "Quota | Settings | Model Prices" switch at the top to open the settings view. Switches and checkboxes save when clicked; text and numbers save when you leave the field or press Enter. Save results appear to the right of section headings, or beside each group legend under "Advanced". The three alert thresholds save together and must be in descending order, with equal values allowed. Changes apply without a restart. A saved field shows "Saved; waiting to take effect", then "In effect" after the plugin confirms it; confirmation waits at most 15 seconds after the save succeeds, even if status requests hang. If still unconfirmed at the deadline, it shows "Not confirmed in effect"; a late confirmation does not change that wait result.
 
 With no failures, the heading shows the most recent save's progress. A failed save takes priority, with the field name and reason; failed controls have red borders and keep their input drafts. Saving another item cannot hide the failure; it clears only when the failed item saves successfully. For multiple failures, the latest reason is shown with the number of other failures. On narrow screens, only "Save failed" and the failure count remain visible; field names and reasons are hidden to keep long text out of the heading. Editing revokes older requests' ability to update that item's result, so late responses and confirmations cannot overwrite later edits. Unresolved failures remain visible. MCP settings also show why the endpoint failed to start.
 
@@ -27,14 +27,16 @@ With no failures, the heading shows the most recent save's progress. A failed sa
 | `cpa_base_url` | `http://127.0.0.1:8317` | Address the plugin uses to reach CPA; change it when CPA uses another port or TLS |
 | `history_retention_days` | `40` | Days of quota history to keep, clamped to 1–365 |
 | `remember_chart_filters` | `false` | "Remember the window, range and order" on the page: the management page remembers, in the current browser, the quota window, time range and order last chosen in the quota chart; when off, the page opens with the defaults |
-| `remember_chart_expanded` | `false` | "Remember expanded groups" on the page: the management page remembers, in the current browser, the multi-account groups expanded in the quota chart, one shared set for both the 5-hour and 7-day quotas; when off, the page opens with the groups collapsed |
+| `remember_chart_expanded` | `false` | "Remember expanded groups" on the page: the management page remembers, in the current browser, the multi-account groups expanded in the quota chart, one shared set for all window kinds; when off, the page opens with the groups collapsed |
 | `account_weights` | empty | The weight of each account in the total of several accounts, keyed by credential file name, a number above 0; accounts without one use the [plan default](usage.md#features) |
 | `account_order` | empty | Account order by credential file name; unlisted accounts follow in default order and missing entries are ignored |
 | `mcp_enabled` | `false` | Enable the independent MCP server, see [MCP](mcp.md) |
 | `mcp_listen` | `127.0.0.1:8319` | MCP listen address |
 | `mcp_key` | empty | Dedicated MCP Bearer key; empty prevents listening |
 | `config_token` | empty | Configuration acknowledgment token generated on each page save; usually no manual setting is needed. See [Architecture](architecture.md#cpa-interface) |
-| `data_dir` | `data/cpa-pulse` in the plugin directory | State and history directory |
+| `pricing.refresh_hours` | `24` | Background catalog refresh interval: `0` for manual only, `1–168` hours |
+| `account_models` | empty | Strict pulse model per runtime auth ID and full quota-group key; see [Pricing and model overrides](#pricing-and-model-overrides) |
+| `data_dir` | `data/cpa-pulse` in the plugin directory | State, history and local model-price files |
 
 A valid IANA `timezone` takes precedence over a fixed offset; an invalid name falls back to the offset or CPA process time zone.
 
@@ -62,7 +64,8 @@ Ignition settings live under `ignition`:
 | Key | Default | Description |
 | --- | --- | --- |
 | `enabled` | `true` | Enable window ignition |
-| `start_hour` | `7` | Hour of the first ignition each day |
+| `windows` | `["short", "long"]` | Automatic pulse classes: `short` = 5h; `long` = 7d/30d. `[]` disables automatic pulsing |
+| `start_hour` | `7` | Start of the daily pulse hours |
 | `end_hour` | `22` | Hour at which ignition stops |
 | `end_grace_minutes` | `30` | Minutes after `end_hour` that are still allowed |
 | `grace_seconds` | `3` | Seconds to wait after a reset |
@@ -70,6 +73,8 @@ Ignition settings live under `ignition`:
 | `failure_backoff_multiplier` | `3` | Factor applied to the wait on each retry |
 | `max_transient_failures` | `3` | Transient errors that pause ignition until the next day |
 | `post_success_hold_seconds` | `60` | Minimum wait after a successful ignition |
+
+Unknown window classes are rejected and duplicates removed; omitting `windows` enables both classes. Kimi and Grok remain monitor-only. Supported windows schedule and confirm independently; one request serves all due windows of a group.
 
 Hours are clamped to 0–23; grace minutes/seconds to zero or more. Retry seconds are at least 60, retry multiplier and maximum failures are clamped to 1–10, and post-success hold is at least 15 seconds. Passive skip settings accept zero or more; a zero maximum disables the skip window. Invalid notification modes become `off`. Invalid or nonpositive account weights are discarded.
 
@@ -87,6 +92,30 @@ Per-service settings live under `providers`, keyed `codex`, `claude`, `antigravi
 | `groups` | Antigravity only: quota groups to ignite, default `["Gemini"]` |
 | `models` | Antigravity only: model per quota group, for example `{"Gemini": "gemini-3.5-flash-lite"}` |
 
+## Pricing and model overrides
+
+Automatic selection uses the cheapest eligible compatible model from CPA's model list, ranked by a 32-input/2-output-token pulse estimate. Prices come from the models.dev v1 catalog at `https://models.dev/api.json`. Startup reads local `model_prices.json` and `model_price_overrides.json` under `data_dir`, with embedded prices as an offline fallback. Refreshes run in the background; a pulse never waits for a pricing fetch. `pricing.refresh_hours` defaults to `24`; `0` disables scheduled refreshes, and `1–168` sets the interval. Values are clamped to 0–168.
+
+Model selection precedence is:
+
+1. `account_models[authID][groupKey]`, using the runtime auth ID and full group key returned by status.
+2. Provider/group `model` or `models` settings.
+3. Automatic cheapest eligible model, with provider ordering when no usable prices exist.
+
+Manual choices are strict and do not fall back to another model. A manual model must appear in CPA's model list when that list is available. The model must also be accessible to the pinned account; the union list cannot prove account access.
+
+```yaml
+pricing:
+  refresh_hours: 24
+account_models:
+  "<auth-id>":
+    "<quota-group-key>": "<model-id>"
+ignition:
+  windows: ["short", "long"]
+```
+
+The [Model Prices view](usage.md#model-prices) edits prices, removes models from automatic selection, and resets overrides. Local prices and removal tombstones survive refreshes. Reset deletes the override; it restores a catalog model or removes an override-only entry. These files are separate from CPA configuration. See [Model prices API](architecture.md#model-prices-api) for programmatic changes.
+
 ## Reset signals
 
 `codex_reset_updates` controls Did Codex Reset forwarding: `enabled` (default `false`), `poll_seconds` (default `300`, at least 300) and `notify_current_pending` (default `true`: on first enable, notify the pending scheduled reset). Only schedules that have not passed and resets completed in the last 48 hours are forwarded, and a later post about a schedule is sent as an update only when its confidence, time or plans change; schedule times are shown in the local time zone, and date-only schedules as a time range. Did Codex Reset is a third-party monitor; its signals are not official OpenAI announcements.
@@ -102,6 +131,7 @@ plugins:
       models_api_key: "new key for cpa-pulse"
       ignition:
         enabled: true
+        windows: ["short", "long"]
         start_hour: 7
         end_hour: 22
       providers:

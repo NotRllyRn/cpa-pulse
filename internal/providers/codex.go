@@ -121,7 +121,7 @@ func ParseCodexUsage(payload map[string]any, now time.Time) ([]quota.RawGroup, e
 			windows = append(windows, w)
 		}
 	}
-	// A window of another length, such as a monthly one, keeps its own ID.
+	// Other lengths, including 30 days, keep their existing period-based IDs.
 	for i, window := range candidates {
 		if window == nil || i == fiveIndex || i == weekIndex || periods[i] == 0 {
 			continue

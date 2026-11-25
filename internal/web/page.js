@@ -99,7 +99,7 @@
       ignition: "Ignition",
       col_group: "Quota group", col_next: "Next ignition", col_reset: "Current reset", col_last: "Last success", col_model: "Model", col_status: "Status",
       chart_title: "Quota history", chart_window: "Quota window", chart_range: "Time range", chart_sort: "Order",
-      quota_5h: "5-hour quota", quota_7d: "7-day quota",
+      quota_5h: "5-hour quota", quota_7d: "7-day quota", quota_30d: "30-day quota",
       sort_default: "Default order", sort_low: "Lowest first",
       no_data: "No data",
       legend_ignited: "● ignition succeeded; ×n marks several targets at the same time",
@@ -129,7 +129,7 @@
       threshold_notice: "Notice", threshold_low: "Low", threshold_critical: "Critical",
       thresholds_hint: "One notification when quota drops to each threshold, and one more when it runs out. The thresholds must not increase from first to third; the first two also set the colors of the bars and the chart.",
       thresholds_order: "Thresholds must satisfy Notice ≥ Low ≥ Critical; not saved",
-      window_5h: "5-hour window", window_7d: "7-day window",
+      window_5h: "5-hour window", window_7d: "7-day window", window_30d: "30-day window",
       recovery_notify: "Notify when quota recovers", reset_reminder: "Remind before resets",
       recovery_notify_5h: "Notify when quota recovers · 5-hour window", recovery_notify_7d: "Notify when quota recovers · 7-day window",
       reset_reminder_5h: "Remind before resets · 5-hour window", reset_reminder_7d: "Remind before resets · 7-day window",
@@ -145,6 +145,9 @@
       passive_skip: "Passive data window (s)", passive_skip_max: "Longest skip (min)",
       passive_skip_hint: "Accounts with passive data within this time before a slot skip that active query; 0 queries every time.",
       ignition_enabled: "Enable ignition",
+      ignition_windows: "Pulse windows", ignition_short: "Short windows (5h)", ignition_long: "Long windows (7d / 30d)",
+      window_active: "Active", window_due: "Due", window_awaiting: "Awaiting confirmation", window_pending: "Pending", window_disabled: "Disabled", window_monitor: "Monitor-only",
+      window_reset: "Reset: {0}", window_next: "Next action: {0}", window_rolling: "Starts with use", window_unknown: "Reset unknown",
       start_hour: "Daily start (hour)", end_hour: "Daily end (hour)", end_grace: "Grace after end (min)",
       grace: "Delay after reset (s)", failure_retry: "Retry after failure (s)", max_transient: "Transient error limit",
       services: "Services", col_service: "Service", col_ignition_model: "Ignition model",
@@ -155,7 +158,7 @@
       chart_prefs: "Quota chart", remember_chart_filters: "Remember the window, range and order",
       remember_chart_filters_hint: "This browser remembers the quota window, time range and order last chosen in the quota history. When off, the page opens with the default choices.",
       remember_chart_expanded: "Remember expanded groups",
-      remember_chart_expanded_hint: "This browser remembers the multi-account groups expanded in the quota history, one set for the 5-hour and 7-day quotas. When off, the page opens with the groups collapsed.",
+      remember_chart_expanded_hint: "This browser remembers the multi-account groups expanded in the quota history across quota windows. When off, the page opens with the groups collapsed.",
       save_hint: "Changes save to CPA's config.yaml automatically, and the plugin applies them within a few seconds. Text and numbers save when you leave the field or press Enter. Save results appear beside section headings or advanced group legends.",
       due: "due", minutes: "{0} min", hours_minutes: "{0} h {1} min", days: "{0} days",
       soon: "soon", in_time: "in {0}", just_now: "just now", ago: "{0} ago",
@@ -181,13 +184,13 @@
       plan: "Plan: {0}", weight_invalid: "The weight must be a number above 0",
       cooldown_stale: "Quota is back, but CPA cools this account down until {0} and rejects requests and ignition until then. Clear the cooldown in the CPA Management Center.",
       cooldown: "CPA cooldown until {0} ({1})",
-      blocked_5h: "5-hour quota used up", blocked_7d: "7-day quota used up", blocked_other: "{0} quota used up",
+      blocked_5h: "5-hour quota used up", blocked_7d: "7-day quota used up", blocked_30d: "30-day quota used up", blocked_other: "{0} quota used up",
       blocked_until: "Ignition resumes after the reset at {0}", blocked_wait: "Ignition resumes when the quota recovers",
       paused_until: "Paused until {0}", failures: "{0} failures", rolling: "Window not started", normal: "Normal",
       ignition_note: "Starts at {0}:00 every day, then ignites {1} seconds after each reset, until {2}.",
       no_targets: "No quota group has ignition enabled.",
       ignite_now: "Ignite now",
-      ignite_confirm: "Send an ignition request to {0} now? This starts a new 5-hour window.",
+      ignite_confirm: "Send an ignition request to {0} now? This may start quota windows.",
       ignited: "{0} ignited",
       ev_ignite: "Ignited", ev_ignite_manual: "Manual ignition", ev_ignite_failed: "Ignition failed", ev_ignite_paused: "Ignition paused", ev_model_refused: "Model refused",
       ev_cooldown_stale: "Cooldown not cleared", ev_plan_change: "Plan changed", ev_notify: "Notified", ev_notify_failed: "Notification failed", ev_codex_reset: "Reset signal", ev_error: "Error",
@@ -213,8 +216,8 @@
       total: "Total", total_suffix: " total", estimated_suffix: " (estimated)", more_accounts: "\u2003… {0} more accounts",
       pooled_note: "Total of {0} accounts; the shade spans the lowest to the highest account",
       stat_total: "Total", stat_current: "Now", stat_pace: "Even pace", stat_diff: "Difference", stat_to_reset: "Until reset",
-      projected_5h: "At the current rate", projected_7d: "At this cycle's daily average",
-      legend_projection_5h: "Projection at the current rate", legend_projection_7d: "Projection at this cycle's daily average", legend_hatch: "No data, or not yet",
+      projected_5h: "At the current rate", projected_7d: "At this cycle's daily average", projected_30d: "At this cycle's daily average",
+      legend_projection_5h: "Projection at the current rate", legend_projection_7d: "Projection at this cycle's daily average", legend_projection_30d: "Projection at this cycle's daily average", legend_hatch: "No data, or not yet",
       detail_aria: "{0} remaining percent",
       detail_keys: "Use the left and right arrow keys to step through the values",
       passive_sample: " (passive)", active_sample: " (active)",
@@ -332,6 +335,7 @@
 
   function askForKey(message) {
     key = "";
+    stopPricePolling();
     sessionStorage.removeItem(KEY_STORE);
     $("app").hidden = true;
     $("key-section").hidden = false;
@@ -446,8 +450,8 @@
   }
 
   function windowName(w) {
-    if (w.short === "5h") return translate("window_5h");
-    if (w.short === "7d") return translate("window_7d");
+    var kind = w.kind === "30d" ? "30d" : w.short || w.kind;
+    if (kind === "5h" || kind === "7d" || kind === "30d") return translate("window_" + kind);
     return w.label;
   }
 
@@ -1020,6 +1024,7 @@
     if (accountDrag) { accountsBehind = true; return; }
     accountsBehind = false;
     renderAccountSettings();
+    if (document.activeElement && document.activeElement.closest(".pulse-model")) return;
     var box = $("accounts");
     clear(box);
     if (!status.accounts.length) {
@@ -1050,6 +1055,9 @@
           block.appendChild(el("div", { class: "group-title", text: group.source_label }));
         }
         (group.windows || []).forEach(function (w) { block.appendChild(quotaRow(group, w, meterIndex++, index)); });
+        block.appendChild(pulseWindowControl(account, group));
+        var modelControl = pulseModelControl(account, group);
+        if (modelControl) block.appendChild(modelControl);
         var foot = freshness(group);
         if (foot) block.appendChild(foot);
         card.appendChild(block);
@@ -1074,7 +1082,7 @@
     var tr = translate;
     if (t.blocked_window) {
       var until = parseTime(t.blocked_until);
-      var blocked = t.blocked_window === "5h" || t.blocked_window === "7d" ? tr("blocked_" + t.blocked_window) : tr("blocked_other", t.blocked_window);
+      var blocked = t.blocked_window === "5h" || t.blocked_window === "7d" || t.blocked_window === "30d" ? tr("blocked_" + t.blocked_window) : tr("blocked_other", t.blocked_window);
       return { kind: "muted", text: blocked, title: until ? tr("blocked_until", fmtDateTime(until)) : tr("blocked_wait") };
     }
     var circuit = parseTime(t.circuit_until);
@@ -1082,6 +1090,50 @@
     if (t.consecutive_failures > 0) return { kind: "warning", text: tr("failures", t.consecutive_failures), title: t.last_error };
     if (t.rolling) return { kind: "muted", text: tr("rolling") };
     return { kind: "success", text: tr("normal") };
+  }
+
+  function pulseWindowStatus(w, target) {
+    if (!target) return { kind: "muted", text: translate("window_monitor") };
+    if (!w.enabled) return { kind: "muted", text: translate("window_disabled") };
+    if (target.blocked_window || parseTime(target.circuit_until) || target.consecutive_failures > 0) return targetStatus(target);
+    var attempt = parseTime(w.last_attempt), success = parseTime(w.last_success);
+    var next = parseTime(w.next_due), reset = parseTime(w.reset);
+    if (attempt && (!success || attempt > success) && !reset) return { kind: "muted", text: translate("window_pending") };
+    if (attempt && (!success || attempt > success)) return { kind: "warning", text: translate("window_awaiting") };
+    if (!next && !reset && !w.rolling) return { kind: "muted", text: translate("window_unknown") };
+    if ((next && next.getTime() <= Date.now()) || (!next && (w.rolling || (reset && reset.getTime() <= Date.now())))) {
+      return { kind: "warning", text: translate("window_due") };
+    }
+    return { kind: "success", text: translate("window_active") };
+  }
+
+  function pulseWindowControl(account, group) {
+    var target = (status.targets || []).filter(function (t) { return t.key === group.key; })[0];
+    var box = el("div", { class: "pulse-windows" });
+    var windows = target ? target.windows || [] : group.windows || [];
+    windows.forEach(function (w) {
+      var st = pulseWindowStatus(w, target);
+      var reset = parseTime(w.reset), next = parseTime(w.next_due);
+      var row = el("div", { class: "pulse-window", "data-window": w.id, "data-window-class": w.class || (w.kind === "5h" ? "short" : "long") }, [
+        badge(st.kind, (w.kind || w.short || w.label || w.id) + " · " + st.text)
+      ]);
+      if (st.title) row.appendChild(el("span", { class: "cell-note" }, maskedNodes(st.title)));
+      row.appendChild(el("span", { class: "cell-note", text: reset ? translate("window_reset", fmtDateTimeDay(reset)) : translate(w.rolling ? "window_rolling" : "window_unknown") }));
+      if (next) row.appendChild(el("span", { class: "cell-note", text: translate("window_next", fmtDateTimeDay(next)) }));
+      box.appendChild(row);
+    });
+    var cooldown = parseTime(account.cooldown_until);
+    if (target && cooldown && cooldown.getTime() > Date.now()) {
+      box.appendChild(el("span", { class: "cell-note", text: translate("cooldown", fmtDateTime(cooldown), fmtIn(cooldown)) }));
+    }
+    if (target) {
+      var button = el("button", { type: "button", class: "btn btn-secondary btn-sm no-snapshot", text: translate("ignite_now"), onclick: function () {
+        if (!confirm(translate("ignite_confirm", target.label))) return;
+        runAction(button, API + "/ignite", { target: target.key }, translate("ignited", target.label));
+      } });
+      box.appendChild(button);
+    }
+    return box;
   }
 
   // The ignition card shows only while ignition is on.
@@ -1094,15 +1146,11 @@
     var endMinutes = (ignition.end_hour || 0) * 60 + (ignition.end_grace_minutes || 0);
     $("ignition-note").textContent = translate("ignition_note", pad(ignition.start_hour), ignition.grace_seconds, pad(Math.floor(endMinutes / 60) % 24) + ":" + pad(endMinutes % 60));
     if (!status.targets.length) {
-      body.appendChild(el("tr", {}, [el("td", { colspan: "7", class: "empty", text: translate("no_targets") })]));
+      body.appendChild(el("tr", {}, [el("td", { colspan: "6", class: "empty", text: translate("no_targets") })]));
       return;
     }
     status.targets.forEach(function (t) {
       var st = targetStatus(t);
-      var button = el("button", { type: "button", class: "btn btn-secondary btn-sm", text: translate("ignite_now"), onclick: function () {
-        if (!confirm(translate("ignite_confirm", t.label))) return;
-        runAction(button, API + "/ignite", { target: t.key }, translate("ignited", t.label));
-      } });
       var next = parseTime(t.next_due), reset = parseTime(t.reset), last = parseTime(t.last_success);
       var statusCell = el("td", {}, [badge(st.kind, st.text)]);
       if (st.title) statusCell.appendChild(el("div", { class: "cell-note" }, maskedNodes(st.title)));
@@ -1112,8 +1160,7 @@
         el("td", { class: "mono", text: reset ? fmtDateTimeDay(reset) : "—" }),
         el("td", { class: "mono", text: last ? fmtDateTime(last) : "—" }),
         el("td", { class: "mono", text: t.last_model || "—" }),
-        statusCell,
-        el("td", { class: "actions" }, [button])
+        statusCell
       ]));
     });
   }
@@ -1227,12 +1274,12 @@
     return "";
   }
 
-  // The kind ("5h", "7d" or "") and short label of the window of a reset or
+  // The kind ("5h", "7d", "30d" or "") and short label of the window of a reset or
   // exhausted event. Events recorded without them have only the window ID.
   function eventWindow(p) {
     var id = String(p.window || "");
     if (p.label) return { kind: p.kind || "", label: p.label };
-    var kind = id === "five-hour" || /-5h$/.test(id) ? "5h" : id === "seven-day" || id.indexOf("weekly") >= 0 ? "7d" : "";
+    var kind = id === "five-hour" || /-5h$/.test(id) ? "5h" : id === "seven-day" || id.indexOf("weekly") >= 0 ? "7d" : id === "thirty-day" || /-30d$/.test(id) ? "30d" : "";
     return { kind: kind, label: kind || id };
   }
 
@@ -1687,10 +1734,11 @@
   // Each entry is the range value, the count and the unit of its label.
   var RANGES = {
     "5h": [["1h", 1, "h"], ["3h", 3, "h"], ["6h", 6, "h"], ["12h", 12, "h"], ["24h", 24, "h"], ["26h", 26, "h"]],
-    "7d": [["24h", 1, "d"], ["4d", 4, "d"], ["8d", 8, "d"], ["15d", 15, "d"], ["1mo", 1, "mo"], ["36d", 36, "d"]]
+    "7d": [["24h", 1, "d"], ["4d", 4, "d"], ["8d", 8, "d"], ["15d", 15, "d"], ["1mo", 1, "mo"], ["36d", 36, "d"]],
+    "30d": [["24h", 24, "h"], ["15d", 15, "d"], ["31d", 31, "d"], ["61d", 61, "d"], ["90d", 90, "d"], ["151d", 151, "d"]]
   };
   // The default ranges are the shortest that cover one whole window.
-  var DEFAULT_RANGE = { "5h": "6h", "7d": "8d" };
+  var DEFAULT_RANGE = { "5h": "6h", "7d": "8d", "30d": "31d" };
   // From a window plus one on, the axis ends at the reset of the selected
   // row, so the rest of its window lies ahead of now. "24h" extends as a
   // range of the 5-hour window, not as the 1d range of the 7-day window.
@@ -1747,13 +1795,13 @@
 
   function unixDate(t) { return new Date(t * 1000); }
 
-  // "5h", "7d" or empty for a window of another length, which the chart
+  // "5h", "7d", "30d" or empty for a window of another length, which the chart
   // does not show.
   function windowKind(series) { return series.kind || ""; }
 
   // The chart offers the window kinds the accounts report, and those whose
   // loaded history still has a sample in the range of an inactive window;
-  // both while none are known.
+  // all supported kinds while none are known.
   function windowKinds() {
     var seen = {};
     (status.accounts || []).forEach(function (a) {
@@ -1761,12 +1809,12 @@
         (g.windows || []).forEach(function (w) { if (w.kind) seen[w.kind] = true; });
       });
     });
-    ["5h", "7d"].forEach(function (kind) {
+    Object.keys(RANGES).forEach(function (kind) {
       var cached = historyCache[historyKey(kind, kind === chartWindow ? range : rangeFor(kind))];
       if (!seen[kind] && cached && recentSamples(cached.data, kind)) seen[kind] = true;
     });
-    var kinds = ["5h", "7d"].filter(function (k) { return seen[k]; });
-    return kinds.length ? kinds : ["5h", "7d"];
+    var kinds = Object.keys(RANGES).filter(function (k) { return seen[k]; });
+    return kinds.length ? kinds : Object.keys(RANGES);
   }
 
   function recentSamples(data, kind) {
@@ -2062,7 +2110,7 @@
 
   function chartTicks(g) {
     var span = g.to - g.from;
-    var step = span <= 3600 ? 600 : span <= 3 * 3600 ? 1800 : span <= 6 * 3600 ? 3600 : span <= 12 * 3600 ? 2 * 3600 : span <= 2 * 86400 ? 4 * 3600 : span <= 8 * 86400 ? 86400 : span <= 15 * 86400 ? 2 * 86400 : 5 * 86400;
+    var step = span <= 3600 ? 600 : span <= 3 * 3600 ? 1800 : span <= 6 * 3600 ? 3600 : span <= 12 * 3600 ? 2 * 3600 : span <= 2 * 86400 ? 4 * 3600 : span <= 8 * 86400 ? 86400 : span <= 15 * 86400 ? 2 * 86400 : span <= 36 * 86400 ? 5 * 86400 : span <= 61 * 86400 ? 10 * 86400 : span <= 90 * 86400 ? 15 * 86400 : 30 * 86400;
     var offset = offsetSeconds(), list = [];
     for (var t = Math.ceil((g.from + offset) / step) * step - offset; t <= g.to; t += step) list.push(t);
     return { list: list, label: function (t) { return span <= 2 * 86400 ? fmtClock(unixDate(t)) : fmtDay(unixDate(t)); } };
@@ -2396,7 +2444,7 @@
     return { parts: parts, resets: resets };
   }
 
-  var WINDOW_SECONDS = { "5h": 5 * 3600, "7d": 7 * 86400 };
+  var WINDOW_SECONDS = { "5h": 5 * 3600, "7d": 7 * 86400, "30d": 30 * 86400 };
   // A current reset this many seconds from the last one in the history is a
   // new reset the history does not hold yet.
   var RESET_DRIFT = 60;
@@ -2570,7 +2618,7 @@
     return { rate: recentSlope(pts), held: held };
   }
 
-  // The rate of a 7-day window, in points per second: what this cycle has
+  // The rate of a long window, in points per second: what this cycle has
   // used so far, from its lowest reading (cycleFloor), over the time since it
   // began, its reset less the window. The hours without use count too, so
   // the rate follows the daily rhythm of use rather than its latest hours.
@@ -2590,7 +2638,7 @@
 
   // The projection: from the latest value along the rate of use until the
   // quota runs out (out) or the window resets, with what is left then
-  // (left). A 5-hour window keeps its current rate; a 7-day window, whose
+  // (left). A 5-hour window keeps its current rate; a long window, whose
   // use comes in daily bursts, takes the rate of its cycle so far. A rate
   // that does not fall stays level. It starts (t0) where the line of samples
   // ends, now; for a 5-hour window whose rate does not yet hold the latest
@@ -2603,7 +2651,7 @@
     if (g.to <= g.now || !lastRun || lastRun.end < g.now - limit || !(last[1] > 0)) return null;
     if (last[5]) return null;
     var rate, t0 = lastRun.end;
-    if (historyWindow === "7d") rate = cycleRate(row, g.now);
+    if (historyWindow !== "5h") rate = cycleRate(row, g.now);
     else {
       var current = currentRate(row, g.now);
       rate = current.rate;
@@ -2642,7 +2690,7 @@
     pieces.forEach(function (piece) { resets = resets.concat(piece.split.resets); });
     var even = row.inactive ? { breaks: [], at: function () { return null; }, extended: function () { return null; } } : rowPace(row, g.now);
 
-    head.appendChild(el("span", { class: "detail-name" }, (row.orphan ? [el("span", { class: SENSITIVE, text: row.name })] : maskedNodes(row.name)).concat([" · " + translate(historyWindow === "5h" ? "quota_5h" : "quota_7d")])));
+    head.appendChild(el("span", { class: "detail-name" }, (row.orphan ? [el("span", { class: SENSITIVE, text: row.name })] : maskedNodes(row.name)).concat([" · " + translate("quota_" + historyWindow)])));
     if (row.inactive) head.appendChild(badge("muted", translate("inactive")));
     head.appendChild(el("span", { class: "muted" + (group ? "" : " " + SENSITIVE), text: group ? translate("pooled_note", row.children.length) : row.sub }));
     head.appendChild(el("span", { class: "detail-tools" }, [maskButton(), snapshotButton("snapshot_detail", function () { return [$("chart-detail-wrap")]; })]));
@@ -2686,7 +2734,7 @@
     // tick labels it would cover.
     var outLabel = null;
     if (ahead && ahead.out != null) {
-      var outText = historyWindow === "7d" ? fmtDateTime(unixDate(ahead.out)) : fmtClock(unixDate(ahead.out));
+      var outText = historyWindow === "5h" ? fmtClock(unixDate(ahead.out)) : fmtDateTime(unixDate(ahead.out));
       var outW = outText.length * CHAR_W;
       outLabel = { text: outText, w: outW, x: Math.max(g.labelW + outW / 2, Math.min(g.width - outW / 2, g.x(ahead.out))) };
     }
@@ -3044,12 +3092,12 @@
   }
 
   // With remember_chart_filters on, the chart filters are kept in this
-  // browser's localStorage as {window, sort, ranges: {"5h": ..., "7d": ...}}
+  // browser's localStorage as {window, sort, ranges: {"5h": ..., "7d": ..., "30d": ...}}
   // and restored when the page opens. Each window keeps its own range because
-  // the two windows offer different ranges.
+  // the windows offer different ranges.
   // With remember_chart_expanded on, CHART_EXPANDED_STORE lists the
   // expanded totals by the id of their row without "group:", the provider
-  // and the label, as in "claude|Claude"; one list serves both windows.
+  // and the label, as in "claude|Claude"; one list serves every window.
   // The switches read the settings form, so a change applies before it is
   // saved.
   var CHART_STORE = "cpa-pulse-chart-filters";
@@ -3290,12 +3338,10 @@
     }).catch(function () { /* tried again after the next status */ });
   }
 
-  // After the first chart loads, the other window's chart is fetched so that
-  // switching to it does not wait. Both kinds are fetched, since a kind no
-  // account reports any more is offered while its history has samples in
-  // the range.
+  // Prefetch the other windows so switching does not wait. A kind no
+  // account reports is offered while its history has samples in the range.
   function prefetchHistory() {
-    ["5h", "7d"].forEach(function (kind) {
+    Object.keys(RANGES).forEach(function (kind) {
       var name = rangeFor(kind);
       if (kind !== chartWindow && !historyCache[historyKey(kind, name)]) {
         fetchHistory(kind, name).then(function () { if (status && renderWindowButtons()) loadHistory(); }).catch(function () {});
@@ -3412,7 +3458,8 @@
     if (format) {
       input.value = formatValue(format, value);
       input.setCustomValidity("");
-    } else if (input.type === "checkbox") input.checked = !!value;
+    } else if (input.name === "ignition.windows") input.checked = !Array.isArray(value) || value.indexOf(input.value) >= 0;
+    else if (input.type === "checkbox") input.checked = !!value;
     else if (input.type === "radio") input.checked = input.value === value;
     else input.value = value === undefined || value === null ? "" : value;
   }
@@ -3536,6 +3583,7 @@
   // save; without it the inputs are read as they are now.
   function buildPatch(top, intent) {
     var patch = {};
+    var windowChecks = false;
     if (intent && !intent.submitted) intent.submitted = [];
     var base = rawConfig[top];
     var state = function (input) {
@@ -3558,6 +3606,13 @@
           if (intent) intent.submitted.push(input);
           return;
         }
+      } else if (input.name === "ignition.windows") {
+        if (!patch.ignition) patch.ignition = {};
+        if (!windowChecks) patch.ignition.windows = [];
+        windowChecks = true;
+        if (saved.checked) patch.ignition.windows.push(saved.value);
+        if (intent) intent.submitted.push(input);
+        return;
       } else if (input.type === "checkbox") value = saved.checked;
       else if (input.type === "radio") {
         if (!saved.checked) return;
@@ -3609,7 +3664,7 @@
   }
 
   function saveControls(input) {
-    var group = input.closest(".thresholds, .mode-switch");
+    var group = input.closest(".thresholds, .mode-switch, .window-checks");
     if (group) return Array.prototype.slice.call(group.querySelectorAll("input"));
     return /^(INPUT|SELECT|TEXTAREA|BUTTON)$/.test(input.tagName) ? [input] : [];
   }
@@ -3628,6 +3683,7 @@
     if (kind) return translate(kind === "name" ? "rename" : "weight");
     if (input.id === "mcp-key-new") return translate("mcp_key");
     if (input.closest(".thresholds")) return translate("thresholds");
+    if (input.name === "ignition.windows") return translate("ignition_windows");
     var mode = input.closest(".mode-switch");
     if (mode) return mode.getAttribute("aria-label");
     var service = input.getAttribute("data-service");
@@ -3743,7 +3799,7 @@
   // Each control owns an edit generation, including changes made while a
   // different control of the same top-level key is awaiting confirmation.
   function noteEdit(input) {
-    var controls = input.type === "radio" ? saveControls(input) : [input];
+    var controls = input.type === "radio" || input.name === "ignition.windows" ? saveControls(input) : [input];
     controls.forEach(function (control) { control.settingsEdit = (control.settingsEdit || 0) + 1; });
   }
 
@@ -3967,6 +4023,305 @@
       else say("saved", translate("save_applied"));
       return applied;
     });
+  }
+
+  // ---- Model prices and per-account pulse models ----
+
+  var prices = null;
+  var pricesLoading = false;
+  var pricesBusy = false;
+  var pricesError = "";
+  var pricesPollTimer = null;
+  var pricesPollUntil = 0;
+  var priceEditing = null;
+  var priceEditorDirty = false;
+  var modelSaves = Object.create(null);
+
+  function priceUSD(value) {
+    if (typeof value !== "number" || !isFinite(value) || value < 0) return "—";
+    if (value === 0) return "$0";
+    return "$" + (value < 0.000001 ? value.toExponential(2) : value.toFixed(8).replace(/0+$/, "").replace(/\.$/, ""));
+  }
+
+  function filteredPrices(entries, scope, query) {
+    query = query.trim().toLowerCase();
+    return entries.filter(function (entry) {
+      return (scope === "all" || entry.cpa_relevant || entry.available_in_cpa) &&
+        (!query || (entry.provider + " " + entry.model).toLowerCase().indexOf(query) >= 0);
+    });
+  }
+
+  function priceProvider(provider, model) {
+    model = (model || "").toLowerCase();
+    switch ((provider || "").toLowerCase()) {
+      case "codex": case "openai": return "openai";
+      case "claude": case "anthropic": return "anthropic";
+      case "google": case "gemini": return "google";
+      case "antigravity":
+        if (model.indexOf("gpt-") === 0) return "openai";
+        if (model.indexOf("claude-") === 0) return "anthropic";
+        if (model.indexOf("gemini-") === 0) return "google";
+        return "antigravity";
+      case "kimi": case "moonshot": case "moonshotai": return "moonshotai";
+      case "xai": case "x-ai": case "grok": return "xai";
+      default: return provider;
+    }
+  }
+
+  function priceConfirmed(entry) {
+    if (!entry.cpa_relevant || !entry.available_in_cpa) return false;
+    return !!(status && (status.accounts || []).some(function (account) {
+      return priceProvider(account.provider, entry.model) === priceProvider(entry.provider, entry.model) &&
+        (account.groups || []).some(function (group) { return group.confirmed_model === entry.model; });
+    }));
+  }
+
+  function priceBadges(entry) {
+    var out = [badge(entry.custom ? "warning" : "muted", entry.custom ? "Custom" : "Fetched")];
+    if (entry.disabled) out.push(badge("failure", "Removed"));
+    if (priceConfirmed(entry)) out.push(badge("success", "Confirmed"));
+    if (!entry.eligible && !entry.disabled) out.push(badge("muted", "Ineligible: " + (entry.reason || "Not eligible for automatic selection")));
+    return out;
+  }
+
+  function renderPrices() {
+    var meta = $("prices-meta"), error = $("prices-error"), refresh = $("prices-refresh");
+    refresh.disabled = pricesBusy || pricesLoading || !!(prices && prices.refreshing);
+    refresh.textContent = prices && prices.refreshing ? "Refreshing Prices…" : "Refresh Prices";
+    meta.textContent = prices ? "Source: " + (prices.source || "models.dev") + " · Last fetched: " +
+      (parseTime(prices.fetched_at) ? fmtDateTime(parseTime(prices.fetched_at)) : "Never") +
+      (prices.refreshing ? " · Refresh in progress" : "") : (pricesLoading ? "Loading prices…" : "Prices have not loaded.");
+    error.textContent = pricesError || (prices && prices.last_error) || "";
+    error.hidden = !error.textContent;
+    var interval = $("prices-interval");
+    if (document.activeElement !== interval && !interval.pricingPending) {
+      var hours = rawConfig.pricing && rawConfig.pricing.refresh_hours;
+      interval.value = hours !== undefined ? hours : prices && prices.refresh_hours !== undefined ? prices.refresh_hours : 24;
+    }
+    var body = $("prices-rows");
+    clear(body);
+    var entries = filteredPrices((prices && prices.entries) || [], $("prices-scope").value, $("prices-search").value);
+    $("prices-count").textContent = entries.length + " of " + ((prices && prices.entries) || []).length + " models";
+    var limit = $("prices-limit");
+    limit.hidden = entries.length <= 200;
+    limit.textContent = limit.hidden ? "" : "Showing 200 of " + entries.length + " models — narrow your search to see more";
+    if (!entries.length) body.appendChild(el("tr", null, [el("td", { colspan: 6, class: "empty", text: pricesLoading ? "Loading prices…" : "No models match. Try All Catalog Models or add a custom price below." })]));
+    entries.slice(0, 200).forEach(function (entry) {
+      var actions = el("div", { class: "price-actions" });
+      function action(label, callback) {
+        actions.appendChild(el("button", { type: "button", class: "btn btn-ghost btn-sm", text: label,
+          disabled: pricesBusy || pricesLoading, "aria-label": label + " " + entry.model, onclick: callback }));
+      }
+      action("Edit", function () { editPrice(entry); });
+      action(entry.disabled ? "Restore" : "Remove", function () { return togglePrice(entry); });
+      if (entry.custom || entry.disabled) action("Reset", function () { return resetPrice(entry); });
+      body.appendChild(el("tr", null, [
+        el("td", null, [el("div", { class: "price-identity" }, [el("span", { class: "secondary", text: entry.provider }), el("span", { class: "mono", text: entry.model })])]),
+        el("td", { class: "num mono", text: entry.has_price ? priceUSD(entry.input_usd_per_million) : "Unpriced" }),
+        el("td", { class: "num mono", text: entry.has_price ? priceUSD(entry.output_usd_per_million) : "Unpriced" }),
+        el("td", { class: "num mono", text: entry.has_price ? priceUSD(entry.estimated_pulse_usd) : "—" }),
+        el("td", null, [el("div", { class: "price-badges" }, priceBadges(entry))]), el("td", null, [actions])
+      ]));
+    });
+  }
+
+  function priceRefreshPaused() {
+    return !!priceEditing || priceEditorDirty || document.activeElement === $("prices-search");
+  }
+
+  function stopPricePolling() {
+    clearTimeout(pricesPollTimer);
+    pricesPollTimer = null;
+    pricesPollUntil = 0;
+  }
+
+  function pollPriceRefresh() {
+    clearTimeout(pricesPollTimer);
+    pricesPollTimer = null;
+    if (!prices || !prices.refreshing || document.hidden || $("view-prices").hidden || $("app").hidden) {
+      stopPricePolling();
+      return;
+    }
+    if (!pricesPollUntil) pricesPollUntil = Date.now() + 120000;
+    if (Date.now() >= pricesPollUntil) return;
+    pricesPollTimer = setTimeout(function () {
+      pricesPollTimer = null;
+      if (document.hidden || $("view-prices").hidden || $("app").hidden) { stopPricePolling(); return; }
+      if (pricesLoading || pricesBusy || priceRefreshPaused()) pollPriceRefresh();
+      else return loadPrices();
+    }, 1000);
+  }
+
+  function loadPrices() {
+    if (pricesLoading || pricesBusy || priceRefreshPaused()) return Promise.resolve();
+    pricesLoading = true;
+    renderPrices();
+    return api("GET", API + "/prices").then(function (data) {
+      if (!priceRefreshPaused()) { prices = data; pricesError = ""; }
+    }).catch(function (err) { if (!priceRefreshPaused()) pricesError = "Could not load prices: " + err.message; })
+      .then(function () { pricesLoading = false; renderPrices(); pollPriceRefresh(); });
+  }
+
+  function mutatePrice(method, path, body) {
+    if (pricesBusy || pricesLoading) return Promise.resolve(false);
+    pricesBusy = true;
+    pricesError = "";
+    $("price-save").disabled = true;
+    renderPrices();
+    return api(method, API + path, body).then(function (data) {
+      if (path === "/prices/refresh") {
+        if (prices) prices.refreshing = !!data.refreshing;
+      } else prices = data;
+      return true;
+    }).catch(function (err) {
+      pricesError = "Could not update prices: " + err.message;
+      return false;
+    }).then(function (ok) {
+      pricesBusy = false;
+      $("price-save").disabled = false;
+      renderPrices();
+      if (ok && path === "/prices/refresh") {
+        pollPriceRefresh();
+        return loadPrices().then(function () { return true; });
+      }
+      return ok;
+    });
+  }
+
+  function refreshPrices() { return mutatePrice("POST", "/prices/refresh", {}); }
+
+  function togglePrice(entry) {
+    if (entry.disabled && !entry.custom) return resetPrice(entry);
+    var body = { provider: entry.provider, model: entry.model, disabled: !entry.disabled };
+    if (entry.custom) {
+      body.input_usd_per_million = entry.input_usd_per_million;
+      body.output_usd_per_million = entry.output_usd_per_million;
+    }
+    return mutatePrice("PUT", "/prices/override", body);
+  }
+
+  function resetPrice(entry) {
+    return mutatePrice("DELETE", "/prices/override?provider=" + encodeURIComponent(entry.provider) + "&model=" + encodeURIComponent(entry.model));
+  }
+
+  function editPrice(entry) {
+    priceEditing = entry;
+    var form = $("price-editor");
+    form.elements.provider.value = entry.provider;
+    form.elements.model.value = entry.model;
+    form.elements.input.value = entry.has_price ? entry.input_usd_per_million : "";
+    form.elements.output.value = entry.has_price ? entry.output_usd_per_million : "";
+    form.elements.provider.readOnly = form.elements.model.readOnly = true;
+    $("price-editor-title").textContent = "Edit price";
+    $("price-editor-error").hidden = true;
+    form.elements.input.focus();
+  }
+
+  function clearPriceEditor() {
+    priceEditing = null;
+    priceEditorDirty = false;
+    var form = $("price-editor");
+    form.reset();
+    form.elements.provider.readOnly = form.elements.model.readOnly = false;
+    $("price-editor-title").textContent = "Add custom price";
+    $("price-editor-error").hidden = true;
+  }
+
+  function savePrice(event) {
+    event.preventDefault();
+    var form = $("price-editor"), fields = form.elements, error = $("price-editor-error");
+    error.hidden = true;
+    if (!form.reportValidity()) return Promise.resolve(false);
+    var input = Number(fields.input.value), output = Number(fields.output.value);
+    var provider = fields.provider.value.trim(), model = fields.model.value.trim();
+    if (!provider || !model || fields.input.value === "" || fields.output.value === "" || !isFinite(input) || !isFinite(output) || input < 0 || output < 0) {
+      error.textContent = "Enter a provider, model ID and non-negative input and output prices.";
+      error.hidden = false;
+      return Promise.resolve(false);
+    }
+    return mutatePrice("PUT", "/prices/override", { provider: provider, model: model,
+      input_usd_per_million: input, output_usd_per_million: output, disabled: !!(priceEditing && priceEditing.disabled) }).then(function (ok) {
+      if (ok) { clearPriceEditor(); $("prices-save-state").textContent = "Price saved."; }
+      else if (pricesError) { error.textContent = pricesError; error.hidden = false; }
+      return ok;
+    });
+  }
+
+  function savePriceInterval() {
+    var field = $("prices-interval"), message = $("prices-save-state"), value = Number(field.value);
+    if (!field.reportValidity() || field.value === "" || !isFinite(value) || value < 0 || value > 168 || Math.floor(value) !== value) {
+      message.textContent = "Enter a refresh interval from 0 to 168 hours.";
+      return Promise.resolve();
+    }
+    field.pricingPending = true;
+    message.textContent = "Saving refresh interval…";
+    saveQueue = saveQueue.then(function () {
+      var pricing = Object.assign({}, rawConfig.pricing || {}, { refresh_hours: value });
+      return patchConfig({ pricing: pricing }).then(function (token) {
+        rawConfig.pricing = pricing;
+        if (prices) prices.refresh_hours = value;
+        return whenApplied(token).then(function (applied) {
+          message.textContent = applied ? "Refresh interval saved." : "Refresh interval saved; waiting for the plugin to apply it.";
+        });
+      }).catch(function (err) { message.textContent = "Could not save refresh interval: " + err.message; });
+    }).then(function () { field.pricingPending = false; });
+    return saveQueue;
+  }
+
+  function pulseModelInfo(group) {
+    if (group.manual_model) return { model: group.manual_model, label: "Manual override", kind: "warning" };
+    var model = group.estimated_cheapest_model || "";
+    var confirmed = !!model && group.confirmed_model === model;
+    return { model: model, label: confirmed ? "Confirmed cheapest" : "Estimated cheapest", kind: confirmed ? "success" : "muted" };
+  }
+
+  function accountModelKey(account, group) { return JSON.stringify([account.auth_id || account.auth_index || account.name, group.key]); }
+
+  function pulseModelControl(account, group) {
+    if (!Array.isArray(group.available_models) || !group.available_models.length ||
+        !status || !(status.targets || []).some(function (target) { return target.key === group.key; })) return null;
+    var info = pulseModelInfo(group), pending = modelSaves[accountModelKey(account, group)];
+    var selected = pending ? pending.value : group.manual_model || "";
+    var options = Array.from(new Set(group.available_models.concat(selected ? [selected] : [])));
+    var select = el("select", { "aria-label": "Pulse model for " + (group.source_label || "quota group"), disabled: pending && pending.pending,
+      onchange: function () { select.blur(); return saveAccountModel(account, group, select.value); } },
+      [el("option", { value: "", text: "Auto (Cheapest)" })].concat(options.map(function (model) {
+        return el("option", { value: model, text: model, selected: model === selected });
+      })));
+    select.value = selected;
+    var children = [badge(info.kind, info.label), el("span", { class: "mono", text: info.model || "No eligible model" })];
+    if (!group.manual_model && info.model && typeof group.estimated_cheapest_cost_usd === "number") children.push(el("span", { class: "hint", text: "Est. pulse: " + priceUSD(group.estimated_cheapest_cost_usd) }));
+    if (group.last_successful_model && group.last_successful_model !== info.model) children.push(el("span", { class: "hint", text: "Last successful: " + group.last_successful_model }));
+    children.push(el("label", null, [el("span", { text: "Pulse model" }), select]));
+    children.push(el("span", { class: pending && pending.failed ? "error-text" : "hint", role: "status", text: pending ? pending.message : "" }));
+    return el("div", { class: "pulse-model" }, children);
+  }
+
+  function saveAccountModel(account, group, value) {
+    var id = account.auth_id || account.auth_index || account.name, groupKey = group.key;
+    var key = accountModelKey(account, group);
+    var pending = { value: value, pending: true, message: "Saving pulse model…" };
+    modelSaves[key] = pending;
+    renderAccounts();
+    saveQueue = saveQueue.then(function () {
+      var models = Object.assign(Object.create(null), rawConfig.account_models || {});
+      models[id] = Object.assign(Object.create(null), models[id] || {});
+      models[id][groupKey] = value;
+      return patchConfig({ account_models: models }).then(function (token) {
+        // Empty strings remove the saved override; retain other accounts and groups.
+        if (!value) delete models[id][groupKey];
+        rawConfig.account_models = models;
+        return whenApplied(token).then(function (applied) {
+          if (applied) { delete modelSaves[key]; return; }
+          pending.message = "Saved; waiting for the plugin to apply it.";
+        });
+      }).catch(function (err) {
+        pending.failed = true;
+        pending.value = group.manual_model || "";
+        pending.message = "Could not save pulse model: " + err.message;
+      });
+    }).then(function () { pending.pending = false; renderAccounts(); });
+    return saveQueue;
   }
 
   // ---- Ignition and MCP settings ----
@@ -4201,6 +4556,7 @@
       sortAccounts();
       renderAccounts();
       fillSettings();
+      if (!$("view-prices").hidden) loadPrices();
       restoreChartFilters();
       return loadHistory();
     }).then(function (loaded) { if (loaded) prefetchHistory(); }).catch(function (err) {
@@ -4210,6 +4566,7 @@
     refreshTimer = setInterval(function () {
       if (document.hidden) return;
       loadStatus().then(refreshHistory).catch(function () {});
+      if (!$("view-prices").hidden) loadPrices();
     }, 30000);
   }
 
@@ -4281,18 +4638,26 @@
   });
   try { $("mcp-public-url").value = localStorage.getItem(MCP_URL_STORE) || ""; } catch (err) {}
 
-  // The quota and settings views; the last one shown is kept in this
-  // browser. The chart is drawn when its view shows, since it measures its
-  // width.
+  // The last view is kept in this browser. Charts measure their visible view.
   var VIEW_STORE = "cpa-pulse-view";
   function showView(name, bounce) {
-    var settings = name === "settings";
-    $("view-quota").hidden = settings;
-    $("view-settings").hidden = !settings;
-    pressSegment("view-buttons", settings ? "settings" : "quota", bounce);
-    try { localStorage.setItem(VIEW_STORE, settings ? "settings" : "quota"); } catch (err) {}
-    if (!settings && history && status) renderChart();
+    if (["quota", "settings", "prices"].indexOf(name) < 0) name = "quota";
+    ["quota", "settings", "prices"].forEach(function (view) { $("view-" + view).hidden = name !== view; });
+    if (name !== "prices") stopPricePolling();
+    pressSegment("view-buttons", name, bounce);
+    try { localStorage.setItem(VIEW_STORE, name); } catch (err) {}
+    if (name === "quota" && history && status) renderChart();
+    if (name === "prices" && key) loadPrices();
   }
+  $("prices-refresh").addEventListener("click", refreshPrices);
+  window.addEventListener("pagehide", stopPricePolling);
+  $("prices-scope").addEventListener("change", renderPrices);
+  $("prices-search").addEventListener("input", renderPrices);
+  $("prices-interval").addEventListener("change", savePriceInterval);
+  $("prices-interval").addEventListener("keydown", function (event) { if (event.key === "Enter") { event.preventDefault(); event.target.blur(); } });
+  $("price-editor").addEventListener("submit", savePrice);
+  $("price-editor").addEventListener("input", function () { priceEditorDirty = true; });
+  $("price-cancel").addEventListener("click", clearPriceEditor);
   $("view-buttons").addEventListener("click", function (e) {
     var button = e.target.closest(".seg");
     if (button && button.getAttribute("aria-pressed") !== "true") showView(button.getAttribute("data-value"), true);

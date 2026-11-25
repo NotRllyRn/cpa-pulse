@@ -14,12 +14,17 @@ func TestListerSendsAPIKey(t *testing.T) {
 			w.WriteHeader(http.StatusUnauthorized)
 			return
 		}
-		w.Write([]byte(`{"data":[{"id":"gpt-6-luna","owned_by":"openai"}]}`))
+		w.Write([]byte(`{"data":[{"id":"gpt-6-luna","owned_by":"openai"},{"id":" gpt-6-luna "},{"id":""}]}`))
 	}))
 	defer server.Close()
-	got, err := (&Lister{}).List(context.Background(), server.URL, "k")
+	lister := &Lister{}
+	got, err := lister.List(context.Background(), server.URL, "k")
 	if err != nil || !reflect.DeepEqual(got, []string{"gpt-6-luna"}) {
 		t.Fatalf("got %v %v", got, err)
+	}
+	got, err = lister.List(context.Background(), server.URL, "k")
+	if err != nil || !reflect.DeepEqual(got, []string{"gpt-6-luna"}) {
+		t.Fatalf("cached IDs: %v %v", got, err)
 	}
 	if _, err := (&Lister{}).List(context.Background(), server.URL, ""); err == nil {
 		t.Fatal("missing key must fail")
